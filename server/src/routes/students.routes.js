@@ -10,6 +10,7 @@ import { requireAuth, requirePerm } from '../middleware/auth.js'
 import { logAudit } from '../utils/audit.js'
 import { emitChange } from '../io.js'
 import { statutOf, formatMatricule, nextCounter } from '../utils/business.js'
+import { notifyNouvelEleve } from '../utils/sms.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -124,6 +125,10 @@ router.post(
 
     await logAudit(req.auth.role, 'CREATION', 'Élève', `${result.matricule} — ${result.nom} ${result.prenoms}`)
     emitChange('students')
+
+    // SMS au fondateur (asynchrone, ne bloque pas la réponse)
+    notifyNouvelEleve(result).catch(err => console.error('[SMS inscription]', err.message))
+
     res.status(201).json(result)
   })
 )

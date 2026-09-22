@@ -4,10 +4,12 @@ import helmet from 'helmet'
 import { createServer } from 'http'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import cron from 'node-cron'
 import 'dotenv/config'
 
 import { initIO } from './io.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { notifyRecapJournalier } from './utils/sms.js'
 
 import authRoutes from './routes/auth.routes.js'
 import settingsRoutes from './routes/settings.routes.js'
@@ -80,3 +82,33 @@ const PORT = process.env.PORT || 4000
 httpServer.listen(PORT, () => {
   console.log(`✅ API gesfinancelites démarrée sur le port ${PORT}`)
 })
+
+// ─── CRON — Récapitulatif journalier SMS au fondateur (chaque jour à 20h00) ──
+cron.schedule('0 20 * * *', async () => {
+  try {
+    const { pool } = await import('./db/pool.js')
+    const today = new Date().toISOString().slice(0, 10)
+
+    // Élèves inscrits aujourd'hui
+    const [rows] = await pool.query(
+      `SELECT nom, prenoms, matricule, total_du
+       FROM students
+       WHERE DATE(date_inscription) = ?
+       ORDER BY date_inscription DESC`,
+      [today]
+    )
+
+    if (rows.length === 0) {
+      console.log('[CRON] Aucun élève inscrit aujourd\'hui, pas de SMS.')
+      return
+    }
+
+    const totalMontant = rows.reduce((sum, s) => sum + (s.total_du || 0), 0)
+    const listeNoms = rows.map(s => `${s.nom} ${s.prenoms}`)
+
+    await notifyRecapJournalier(today, rows.length, totalMontant, listeNoms)
+    console.log(`[CRON] SMS récap journalier envoyé — ${rows.length} élèves`)
+  } catch (err) {
+    console.error('[CRON] Erreur récap SMS:', err.message)
+  }
+}, { timezone: 'Africa/Abidjan' })

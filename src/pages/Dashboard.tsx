@@ -1,7 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { fmt, fmtDate, monthKey } from '@/lib/utils'
-import { Users, TrendingUp, AlertTriangle, CheckCircle, DollarSign, Clock } from 'lucide-react'
+import { Users, TrendingUp, AlertTriangle, CheckCircle, DollarSign, Clock, Search, QrCode } from 'lucide-react'
+import { API_URL } from '@/lib/apiClient'
+import type { Student } from '@/types'
 
 function StatCard({ title, value, sub, icon, color }: {
   title: string; value: string; sub?: string; icon: React.ReactNode; color: string
@@ -22,6 +24,16 @@ function StatCard({ title, value, sub, icon, color }: {
 
 export default function Dashboard() {
   const { students, payments, expenses, computeAlerts, settings } = useAppStore()
+  const [matriculeQuery, setMatriculeQuery] = useState('')
+  const [found, setFound] = useState<Student | null | undefined>(undefined)
+
+  function searchMatricule() {
+    const q = matriculeQuery.trim().toUpperCase()
+    if (!q) return
+    const s = students.find(st => st.matricule.toUpperCase() === q || st.token === q)
+    setFound(s ?? null)
+  }
+
 
   const actifs = students.filter(s => s.actif)
   const soldes = actifs.filter(s => s.statut === 'SOLDE' || s.statut === 'CREDIT').length
@@ -43,11 +55,49 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tableau de bord</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {settings?.school_name ?? 'École'} — {settings?.annee_scolaire ?? ''}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tableau de bord</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {settings?.school_name ?? 'École'} — {settings?.annee_scolaire ?? ''}
+          </p>
+        </div>
+
+        {/* ─── Recherche rapide par matricule ─── */}
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm w-full sm:w-auto">
+          <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+            <QrCode className="h-3.5 w-3.5 text-red-600" /> Recherche rapide par matricule
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={matriculeQuery}
+              onChange={e => { setMatriculeQuery(e.target.value); if (!e.target.value) setFound(undefined) }}
+              onKeyDown={e => e.key === 'Enter' && searchMatricule()}
+              placeholder="Ex: CSE-2025-001"
+              className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-transparent dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 font-mono w-44"
+            />
+            <button
+              onClick={searchMatricule}
+              className="bg-red-700 text-white px-3 py-1.5 rounded-lg hover:bg-red-800 transition-colors"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </div>
+          {found === null && (
+            <p className="text-xs text-red-500 mt-1.5">❌ Aucun élève trouvé</p>
+          )}
+          {found && (
+            <div className="mt-2 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-2">
+              {found.photo_url && (
+                <img src={`${API_URL}${found.photo_url}`} alt="" className="w-8 h-10 object-cover rounded shadow" />
+              )}
+              <div>
+                <p className="text-sm font-bold text-gray-800 dark:text-white">{found.nom} {found.prenoms}</p>
+                <p className="text-xs text-gray-500">{found.classe_nom ?? '—'} · {found.statut === 'SOLDE' ? '✅ Soldé' : `Reste: ${fmt(found.total_du - found.total_paye)}`}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}

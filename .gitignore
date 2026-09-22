@@ -1,1 +1,4 @@
 node_modules/
+
+# Uploaded student files
+server/uploads/
