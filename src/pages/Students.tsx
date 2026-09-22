@@ -1,12 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { api, ApiError } from '@/lib/apiClient'
+import { api, ApiError, API_URL } from '@/lib/apiClient'
 import { fmt, fmtDateShort, statutOf } from '@/lib/utils'
-import { Search, Plus, Wallet, Pencil } from 'lucide-react'
+import { Search, Plus, Wallet, Pencil, QrCode, Camera, User } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/FormFields'
 import toast from 'react-hot-toast'
+import QRCode from 'qrcode'
 import type { Student } from '@/types'
 
 const STATUT_COLORS: Record<string, string> = {
@@ -45,6 +46,17 @@ export default function Students() {
   const [payMode, setPayMode] = useState('Espèces')
   const [payMotif, setPayMotif] = useState('Scolarité')
   const [paying, setPaying] = useState(false)
+
+  // Photo upload
+  const [photoModal, setPhotoModal] = useState<Student | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // QR code
+  const [qrModal, setQrModal] = useState<Student | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
   const filtered = students.filter(s => {
     if (!s.actif) return false
@@ -130,6 +142,49 @@ export default function Students() {
     }
   }
 
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    const reader = new FileReader()
+    reader.onload = ev => setPhotoPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  async function handleUploadPhoto() {
+    if (!photoModal || !photoFile) return
+    setUploadingPhoto(true)
+    try {
+      const fd = new FormData()
+      fd.append('photo', photoFile)
+      const res = await fetch(`${API_URL}/api/students/${photoModal.id}/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('gesfin_token')}` },
+        body: fd,
+      })
+      if (!res.ok) throw new Error('Échec upload')
+      toast.success('Photo enregistrée !')
+      setPhotoModal(null)
+      setPhotoFile(null)
+      setPhotoPreview(null)
+      await loadAll()
+    } catch {
+      toast.error('Erreur lors de l\'upload de la photo.')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
+  async function openQrModal(s: Student) {
+    setQrModal(s)
+    const url = await QRCode.toDataURL(s.matricule, {
+      width: 280,
+      margin: 2,
+      color: { dark: '#7b0000', light: '#ffffff' },
+    })
+    setQrDataUrl(url)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -177,6 +232,7 @@ export default function Students() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             <tr>
+              <th className="px-4 py-3 text-left font-medium">Photo</th>
               <th className="px-4 py-3 text-left font-medium">Matricule</th>
               <th className="px-4 py-3 text-left font-medium">Nom & Prénoms</th>
               <th className="px-4 py-3 text-left font-medium">Classe</th>
@@ -184,14 +240,32 @@ export default function Students() {
               <th className="px-4 py-3 text-right font-medium">Payé</th>
               <th className="px-4 py-3 text-right font-medium">Reste</th>
               <th className="px-4 py-3 text-center font-medium">Statut</th>
-              {hasPerm('editStudents') && <th className="px-4 py-3 text-right font-medium">Actions</th>}
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Aucun élève trouvé</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Aucun élève trouvé</td></tr>
             ) : filtered.map(s => (
               <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <td className="px-4 py-2">
+                  {s.photo_url ? (
+                    <img
+                      src={`${API_URL}${s.photo_url}`}
+                      alt=""
+                      className="w-10 h-12 object-cover rounded-md border border-gray-200 cursor-pointer hover:scale-110 transition-transform"
+                      onClick={() => { setPhotoModal(s); setPhotoPreview(null); setPhotoFile(null) }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => { setPhotoModal(s); setPhotoPreview(null); setPhotoFile(null) }}
+                      className="w-10 h-12 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      title="Ajouter une photo"
+                    >
+                      <User className="h-4 w-4 text-gray-400" />
+                    </button>
+                  )}
+                </td>
                 <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.matricule}</td>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                   {s.nom} {s.prenoms}
@@ -206,18 +280,25 @@ export default function Students() {
                     {s.statut === 'SOLDE' ? 'Soldé' : s.statut === 'CREDIT' ? 'Crédit' : 'Non soldé'}
                   </span>
                 </td>
-                {hasPerm('editStudents') && (
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      {hasPerm('pay') && (
-                        <button
-                          onClick={() => { setPayModal(s); setPayAmount(''); setPayMode('Espèces'); setPayMotif('Scolarité') }}
-                          title="Encaisser un paiement"
-                          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
-                        >
-                          <Wallet className="h-4 w-4" />
-                        </button>
-                      )}
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1.5">
+                    {hasPerm('pay') && (
+                      <button
+                        onClick={() => { setPayModal(s); setPayAmount(''); setPayMode('Espèces'); setPayMotif('Scolarité') }}
+                        title="Encaisser un paiement"
+                        className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30"
+                      >
+                        <Wallet className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openQrModal(s)}
+                      title="QR Code"
+                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                    >
+                      <QrCode className="h-4 w-4" />
+                    </button>
+                    {hasPerm('editStudents') && (
                       <button
                         onClick={() => openEdit(s)}
                         title="Modifier"
@@ -225,9 +306,9 @@ export default function Students() {
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
-                    </div>
-                  </td>
-                )}
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -306,6 +387,109 @@ export default function Students() {
           </form>
         )}
       </Modal>
+      {/* Photo upload modal */}
+      <Modal open={!!photoModal} onClose={() => setPhotoModal(null)} title="Photo d'identité de l'élève" maxWidth="sm">
+        {photoModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              <strong>{photoModal.nom} {photoModal.prenoms}</strong> — {photoModal.matricule}
+            </p>
+            {/* Aperçu */}
+            <div className="flex justify-center">
+              {(photoPreview ?? (photoModal.photo_url ? `${API_URL}${photoModal.photo_url}` : null)) ? (
+                <img
+                  src={photoPreview ?? `${API_URL}${photoModal.photo_url}`}
+                  alt="Aperçu"
+                  className="w-32 h-40 object-cover rounded-xl border-4 border-red-200 shadow"
+                />
+              ) : (
+                <div className="w-32 h-40 bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300">
+                  <User className="h-12 w-12 text-gray-300" />
+                </div>
+              )}
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              className="w-full py-2.5 border-2 border-dashed border-red-300 rounded-xl text-red-700 text-sm font-semibold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              {photoFile ? photoFile.name : 'Choisir une photo…'}
+            </button>
+            <div className="flex gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setPhotoModal(null)} className="flex-1">Annuler</Button>
+              <Button
+                onClick={handleUploadPhoto}
+                loading={uploadingPhoto}
+                disabled={!photoFile}
+                className="flex-1 bg-red-700 hover:bg-red-800"
+              >
+                Enregistrer la photo
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* QR Code modal */}
+      {qrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQrModal(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-xs w-full text-center space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              {qrModal.photo_url && (
+                <img
+                  src={`${API_URL}${qrModal.photo_url}`}
+                  alt=""
+                  className="w-16 h-20 object-cover rounded-lg mx-auto mb-2 shadow border-2 border-red-200"
+                />
+              )}
+              <p className="font-extrabold text-gray-900">{qrModal.nom} {qrModal.prenoms}</p>
+              <p className="text-xs text-gray-400 font-mono">{qrModal.matricule}</p>
+              <p className="text-xs text-gray-400">{qrModal.classe_nom ?? '—'}</p>
+            </div>
+            {qrDataUrl && (
+              <img src={qrDataUrl} alt="QR Code" className="mx-auto w-44 h-44 rounded-xl border border-gray-200" />
+            )}
+            <p className="text-xs text-gray-400">Ce QR Code contient le matricule de l'élève</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const w = window.open('', '_blank')
+                  if (!w) return
+                  const photo = qrModal.photo_url ? `<img src="${API_URL}${qrModal.photo_url}" style="width:80px;height:96px;object-fit:cover;border-radius:8px;margin-bottom:8px"><br>` : ''
+                  w.document.write(`<html><body style="text-align:center;font-family:sans-serif;padding:20px">
+                    ${photo}
+                    <strong>${qrModal.nom} ${qrModal.prenoms}</strong><br>
+                    <small>${qrModal.matricule} — ${qrModal.classe_nom ?? ''}</small><br><br>
+                    <img src="${qrDataUrl}" style="width:220px;height:220px"><br>
+                    <small>Cours Secondaire Élites Divo</small>
+                  </body></html>`)
+                  w.document.close()
+                  w.print()
+                }}
+                className="flex-1 py-2 rounded-xl bg-red-700 text-white font-semibold hover:bg-red-800 text-sm"
+              >
+                🖨️ Imprimer
+              </button>
+              <button
+                onClick={() => setQrModal(null)}
+                className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 text-sm"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

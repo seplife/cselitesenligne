@@ -11,11 +11,12 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ---- USERS (comptes réels — un par profil/rôle) ----
+-- ---- USERS (comptes réels — login par username + password) ----
 CREATE TABLE IF NOT EXISTS users (
   id            CHAR(36) PRIMARY KEY,
-  role          VARCHAR(20) NOT NULL UNIQUE,
-  label         VARCHAR(60) NOT NULL,
+  username      VARCHAR(60) NOT NULL UNIQUE,
+  nom_complet   VARCHAR(120) NOT NULL,
+  role          VARCHAR(20) NOT NULL,
   password_hash TEXT NOT NULL,
   actif         TINYINT(1) NOT NULL DEFAULT 1,
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS students (
   total_paye         INT NOT NULL DEFAULT 0,
   statut             VARCHAR(12) NOT NULL DEFAULT 'NON_SOLDE',
   token              CHAR(36) NOT NULL,
+  photo_url          TEXT NULL,
   actif              TINYINT(1) NOT NULL DEFAULT 1,
   date_inscription   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

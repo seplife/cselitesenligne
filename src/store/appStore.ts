@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, login as apiLogin, setSession, clearSession, getStoredUser } from '@/lib/apiClient'
+import { api, login as apiLogin, register as apiRegister, setSession, clearSession, getStoredUser } from '@/lib/apiClient'
 import { connectRealtime, disconnectRealtime } from '@/lib/realtime'
 import { todayKey, isToday, isThisMonth } from '@/lib/utils'
 import type {
@@ -68,7 +68,8 @@ interface AppStore {
   activeTab: TabId
 
   // Actions
-  login: (role: RoleKey, password: string) => Promise<void>
+  login: (username: string, password: string) => Promise<void>
+  register: (data: { username: string; nom_complet: string; role: string; password: string }) => Promise<void>
   logout: () => Promise<void>
   setActiveTab: (tab: TabId) => void
   loadAll: () => Promise<void>
@@ -135,8 +136,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  login: async (role, password) => {
-    const { token, user } = await apiLogin(role, password)
+  login: async (username, password) => {
+    const { token, user } = await apiLogin(username, password)
+    setSession(token, user)
+    set({ role: user.role as RoleKey, userLabel: user.label, activeTab: 'dashboard' })
+    await get().loadAll()
+  },
+
+  register: async (data) => {
+    const { token, user } = await apiRegister(data)
     setSession(token, user)
     set({ role: user.role as RoleKey, userLabel: user.label, activeTab: 'dashboard' })
     await get().loadAll()

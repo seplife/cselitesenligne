@@ -2,6 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import { createServer } from 'http'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import 'dotenv/config'
 
 import { initIO } from './io.js'
@@ -22,6 +24,8 @@ import staffPaymentsRoutes from './routes/staff_payments.routes.js'
 import debtsRoutes from './routes/debts.routes.js'
 import documentsRoutes from './routes/documents.routes.js'
 import auditLogsRoutes from './routes/audit_logs.routes.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const httpServer = createServer(app)
@@ -44,7 +48,10 @@ app.use(
   })
 )
 
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '10mb' }))
+
+// ─── Fichiers statiques — photos élèves ────────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')))
 
 app.get('/api/health', (req, res) => res.json({ ok: true, name: 'gesfinancelites-api' }))
 

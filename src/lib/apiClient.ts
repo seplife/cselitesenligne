@@ -86,6 +86,15 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }
 
-export async function login(role: string, password: string) {
-  return api.post<{ token: string; user: AuthUser }>('/api/auth/login', { role, password })
+export async function login(username: string, password: string) {
+  return api.post<{ token: string; user: AuthUser }>('/api/auth/login', { username, password })
+}
+
+export async function register(data: {
+  username: string
+  nom_complet: string
+  role: string
+  password: string
+}) {
+  return api.post<{ token: string; user: AuthUser }>('/api/auth/register', data)
 }

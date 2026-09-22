@@ -75,6 +75,7 @@ export interface Student {
   total_paye: number;
   statut: StudentStatut;
   token: string;
+  photo_url?: string;
   actif: boolean;
   date_inscription: string;
   created_at: string;

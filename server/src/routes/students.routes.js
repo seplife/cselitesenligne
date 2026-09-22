@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { v4 as uuid } from 'uuid'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { pool, withTransaction } from '../db/pool.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { requireAuth, requirePerm } from '../middleware/auth.js'
@@ -11,6 +14,25 @@ import { statutOf, formatMatricule, nextCounter } from '../utils/business.js'
 const router = Router()
 router.use(requireAuth)
 
+// ─── Multer — upload photo élève ──────────────────────────────────────────────
+const uploadDir = path.resolve('uploads/photos')
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (req, _file, cb) => cb(null, `student_${req.params.id}_${Date.now()}.jpg`),
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true)
+    else cb(new Error('Seules les images sont acceptées.'))
+  },
+})
+
+// ─── GET /api/students ─────────────────────────────────────────────────────────
 router.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -19,6 +41,25 @@ router.get(
   })
 )
 
+// ─── GET /api/students/qr/:token  (public lookup par token QR) ────────────────
+router.get(
+  '/qr/:token',
+  asyncHandler(async (req, res) => {
+    const [rows] = await pool.query(
+      'SELECT * FROM students WHERE token = ? OR matricule = ?',
+      [req.params.token, req.params.token]
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Élève introuvable.' })
+    const student = rows[0]
+    const [payments] = await pool.query(
+      'SELECT * FROM payments WHERE student_id = ? AND annule = 0 ORDER BY date DESC LIMIT 10',
+      [student.id]
+    )
+    res.json({ ...student, payments })
+  })
+)
+
+// ─── GET /api/students/:id ─────────────────────────────────────────────────────
 router.get(
   '/:id',
   asyncHandler(async (req, res) => {
@@ -32,6 +73,7 @@ router.get(
   })
 )
 
+// ─── POST /api/students ────────────────────────────────────────────────────────
 const studentSchema = z.object({
   nom: z.string().min(1),
   prenoms: z.string().min(1),
@@ -86,6 +128,7 @@ router.post(
   })
 )
 
+// ─── PUT /api/students/:id ─────────────────────────────────────────────────────
 const studentUpdateSchema = studentSchema.partial().extend({ actif: z.boolean().optional() })
 
 router.put(
@@ -124,7 +167,7 @@ router.put(
       }
 
       const merged = { ...body, classe_nom: classeNom, total_du: totalDu, statut }
-      delete merged.classe_id // remis explicitement ci-dessous si fourni
+      delete merged.classe_id
       const fields = Object.keys(merged).filter((k) => merged[k] !== undefined)
       if (body.classe_id !== undefined) fields.push('classe_id')
       if (fields.length === 0) return student
@@ -144,12 +187,26 @@ router.put(
   })
 )
 
-async function currentClasseFrais(conn, classeId) {
-  if (!classeId) return 0
-  const [rows] = await conn.query('SELECT frais FROM classes WHERE id = ?', [classeId])
-  return rows[0]?.frais ?? 0
-}
+// ─── POST /api/students/:id/photo ─────────────────────────────────────────────
+router.post(
+  '/:id/photo',
+  requirePerm('editStudents'),
+  upload.single('photo'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu.' })
 
+    const [rows] = await pool.query('SELECT id, nom, prenoms, matricule FROM students WHERE id = ?', [req.params.id])
+    if (!rows[0]) return res.status(404).json({ error: 'Élève introuvable.' })
+
+    const photoUrl = `/uploads/photos/${req.file.filename}`
+    await pool.query('UPDATE students SET photo_url = ? WHERE id = ?', [photoUrl, req.params.id])
+    await logAudit(req.auth.role, 'PHOTO_UPLOAD', 'Élève', `${rows[0].matricule} — ${rows[0].nom} ${rows[0].prenoms}`)
+    emitChange('students')
+    res.json({ photo_url: photoUrl })
+  })
+)
+
+// ─── DELETE /api/students/:id ──────────────────────────────────────────────────
 router.delete(
   '/:id',
   requirePerm('editStudents'),
@@ -161,5 +218,11 @@ router.delete(
     res.json({ ok: true })
   })
 )
+
+async function currentClasseFrais(conn, classeId) {
+  if (!classeId) return 0
+  const [rows] = await conn.query('SELECT frais FROM classes WHERE id = ?', [classeId])
+  return rows[0]?.frais ?? 0
+}
 
 export default router
