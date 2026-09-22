@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAppStore, ROLES } from '@/store/appStore'
+import { ApiError } from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/FormFields'
 import { cn } from '@/lib/utils'
@@ -9,38 +10,29 @@ import type { RoleKey } from '@/types'
 const ROLE_ORDER: RoleKey[] = ['directeur', 'caissiere', 'secretaire', 'educateur', 'comptable', 'consultation']
 
 export default function Login() {
-  const { settings, setRole, loadAll, logAudit } = useAppStore()
+  const { settings, login } = useAppStore()
   const [selectedRole, setSelectedRole] = useState<RoleKey | null>(null)
-  const [pin, setPin] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [showPin, setShowPin] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleRoleSelect = (role: RoleKey) => {
     setSelectedRole(role)
-    setPin('')
+    setPassword('')
   }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedRole || !settings) return
+    if (!selectedRole) return
     setLoading(true)
 
-    const pins = settings.pins ?? {}
-    const expected = pins[selectedRole] ?? '0000'
-
-    if (pin !== expected) {
-      toast.error('PIN incorrect. Réessayez.')
-      setPin('')
-      setLoading(false)
-      return
-    }
-
     try {
-      setRole(selectedRole)
-      await logAudit('CONNEXION', 'Session', ROLES[selectedRole].label, 'Connexion réussie')
+      await login(selectedRole, password)
       toast.success(`Bienvenue, ${ROLES[selectedRole].label} !`)
-    } catch (e) {
-      console.error(e)
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Connexion impossible. Vérifiez le serveur.'
+      toast.error(message)
+      setPassword('')
     } finally {
       setLoading(false)
     }
@@ -87,25 +79,24 @@ export default function Login() {
             })}
           </div>
 
-          {/* PIN form */}
+          {/* Password form */}
           {selectedRole && (
             <form onSubmit={handleLogin} className="space-y-4 animate-in slide-in-from-top-2 duration-200">
               <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                 <Input
-                  label={`Code PIN — ${ROLES[selectedRole].label}`}
-                  type={showPin ? 'text' : 'password'}
-                  value={pin}
-                  onChange={e => setPin(e.target.value)}
+                  label={`Mot de passe — ${ROLES[selectedRole].label}`}
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
                   placeholder="••••"
-                  maxLength={8}
                   autoFocus
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPin(s => !s)}
+                  onClick={() => setShowPassword(s => !s)}
                   className="text-xs text-gray-400 hover:text-gray-600 mt-1"
                 >
-                  {showPin ? 'Masquer' : 'Afficher'} le PIN
+                  {showPassword ? 'Masquer' : 'Afficher'} le mot de passe
                 </button>
               </div>
               <Button
@@ -113,12 +104,10 @@ export default function Login() {
                 className="w-full"
                 size="lg"
                 loading={loading}
+                disabled={!password}
               >
                 Se connecter
               </Button>
-              <p className="text-xs text-center text-gray-400">
-                PIN par défaut : Directeur <strong>1234</strong> · Autres profils <strong>0000</strong>
-              </p>
             </form>
           )}
 

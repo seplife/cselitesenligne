@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/apiClient'
 import { fmt } from '@/lib/utils'
 import { Settings as SettingsIcon, Save } from 'lucide-react'
 import type { Settings as SettingsType } from '@/types'
@@ -18,7 +18,7 @@ export default function Settings() {
   async function handleSave() {
     setSaving(true)
     try {
-      await supabase.from('settings').update({
+      await api.put('/api/settings', {
         school_name: form.school_name,
         sigle: form.sigle,
         ville: form.ville,
@@ -27,7 +27,7 @@ export default function Settings() {
         annee_scolaire: form.annee_scolaire,
         taux_horaire_vacataire: form.taux_horaire_vacataire,
         seuil_alerte_montant: form.seuil_alerte_montant,
-      }).eq('id', 'main')
+      })
       await loadAll()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)

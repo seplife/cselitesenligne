@@ -1,12 +1,16 @@
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
-import { todayKey, monthKey, isToday, isThisMonth, statutOf } from '@/lib/utils'
+import { api, login as apiLogin, setSession, clearSession, getStoredUser } from '@/lib/apiClient'
+import { connectRealtime, disconnectRealtime } from '@/lib/realtime'
+import { todayKey, isToday, isThisMonth } from '@/lib/utils'
 import type {
   RoleKey, Settings, Class, Student, Payment, Reminder,
   Expense, CashClosure, Teacher, TeacherHour, Staff, StaffPayment,
   Debt, Document, AuditLog, Alert, TabId
 } from '@/types'
 
+// Copie côté client des permissions — sert uniquement à l'affichage
+// (cacher des boutons, des onglets). L'autorisation réelle est appliquée
+// par le serveur (server/src/roles.js) ; cette copie ne protège rien.
 export const ROLES = {
   directeur: {
     label: 'Directeur', icon: '👔',
@@ -43,6 +47,7 @@ export const ROLES = {
 interface AppStore {
   // Auth
   role: RoleKey | null
+  userLabel: string | null
   // Data
   settings: Settings | null
   classes: Class[]
@@ -63,10 +68,11 @@ interface AppStore {
   activeTab: TabId
 
   // Actions
-  setRole: (role: RoleKey | null) => void
+  login: (role: RoleKey, password: string) => Promise<void>
+  logout: () => Promise<void>
   setActiveTab: (tab: TabId) => void
   loadAll: () => Promise<void>
-  logAudit: (action: string, entity: string, reference?: string, details?: string) => Promise<void>
+  refreshTable: (table: string) => Promise<void>
   computeAlerts: () => Alert[]
 
   // Helpers
@@ -75,10 +81,30 @@ interface AppStore {
   hasTab: (tab: TabId) => boolean
 }
 
-const subs: (() => void)[] = []
+// Mappe le nom de table renvoyé par le serveur (evenement Socket.IO ou
+// endpoint REST) vers la clé du store et le chemin d'API correspondant.
+const TABLE_MAP: Record<string, { key: keyof AppStore; path: string; single?: boolean }> = {
+  settings: { key: 'settings', path: '/api/settings', single: true },
+  classes: { key: 'classes', path: '/api/classes' },
+  students: { key: 'students', path: '/api/students' },
+  payments: { key: 'payments', path: '/api/payments' },
+  reminders: { key: 'reminders', path: '/api/reminders' },
+  expenses: { key: 'expenses', path: '/api/expenses' },
+  cash_closures: { key: 'cashClosures', path: '/api/cash_closures' },
+  teachers: { key: 'teachers', path: '/api/teachers' },
+  teacher_hours: { key: 'teacherHours', path: '/api/teacher_hours' },
+  staff: { key: 'staff', path: '/api/staff' },
+  staff_payments: { key: 'staffPayments', path: '/api/staff_payments' },
+  debts: { key: 'debts', path: '/api/debts' },
+  documents: { key: 'documents', path: '/api/documents' },
+  audit_logs: { key: 'auditLogs', path: '/api/audit_logs' },
+}
+
+let disconnect: (() => void) | null = null
 
 export const useAppStore = create<AppStore>((set, get) => ({
   role: null,
+  userLabel: null,
   settings: null,
   classes: [],
   students: [],
@@ -96,9 +122,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   loading: false,
   activeTab: 'dashboard',
 
-  setRole: (role) => set({ role, activeTab: 'dashboard' }),
-  setActiveTab: (tab) => set({ activeTab: tab }),
-
   roleDef: () => {
     const { role } = get()
     return ROLES[role ?? 'consultation']
@@ -110,68 +133,79 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return get().roleDef().tabs.includes(tab)
   },
 
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
+  login: async (role, password) => {
+    const { token, user } = await apiLogin(role, password)
+    setSession(token, user)
+    set({ role: user.role as RoleKey, userLabel: user.label, activeTab: 'dashboard' })
+    await get().loadAll()
+  },
+
+  logout: async () => {
+    try {
+      await api.post('/api/auth/logout')
+    } catch {
+      // On se déconnecte localement même si l'appel échoue (session déjà expirée, etc.)
+    }
+    disconnectRealtime()
+    if (disconnect) { disconnect(); disconnect = null }
+    clearSession()
+    set({
+      role: null, userLabel: null, settings: null, classes: [], students: [], payments: [],
+      reminders: [], expenses: [], cashClosures: [], teachers: [], teacherHours: [], staff: [],
+      staffPayments: [], debts: [], documents: [], auditLogs: [],
+    })
+  },
+
   loadAll: async () => {
     set({ loading: true })
     try {
-      // Load all data in parallel
       const [
-        settingsRes, classesRes, studentsRes, paymentsRes, remindersRes,
-        expensesRes, closuresRes, teachersRes, teacherHoursRes, staffRes,
-        staffPaymentsRes, debtsRes, documentsRes, auditRes
+        settings, classes, students, payments, reminders,
+        expenses, cashClosures, teachers, teacherHours, staff,
+        staffPayments, debts, documents, auditLogs
       ] = await Promise.all([
-        supabase.from('settings').select('*').eq('id', 'main').single(),
-        supabase.from('classes').select('*').order('nom'),
-        supabase.from('students').select('*').order('nom'),
-        supabase.from('payments').select('*').order('date', { ascending: false }).limit(500),
-        supabase.from('reminders').select('*').order('date', { ascending: false }).limit(300),
-        supabase.from('expenses').select('*').order('date', { ascending: false }).limit(500),
-        supabase.from('cash_closures').select('*').order('date', { ascending: false }).limit(90),
-        supabase.from('teachers').select('*').order('nom'),
-        supabase.from('teacher_hours').select('*').order('mois', { ascending: false }).limit(500),
-        supabase.from('staff').select('*').order('nom'),
-        supabase.from('staff_payments').select('*').order('mois', { ascending: false }).limit(500),
-        supabase.from('debts').select('*').order('created_at', { ascending: false }).limit(300),
-        supabase.from('documents').select('*').order('date', { ascending: false }).limit(300),
-        supabase.from('audit_logs').select('*').order('date', { ascending: false }).limit(400),
+        api.get<Settings>('/api/settings'),
+        api.get<Class[]>('/api/classes'),
+        api.get<Student[]>('/api/students'),
+        api.get<Payment[]>('/api/payments'),
+        api.get<Reminder[]>('/api/reminders'),
+        api.get<Expense[]>('/api/expenses'),
+        api.get<CashClosure[]>('/api/cash_closures'),
+        api.get<Teacher[]>('/api/teachers'),
+        api.get<TeacherHour[]>('/api/teacher_hours'),
+        api.get<Staff[]>('/api/staff'),
+        api.get<StaffPayment[]>('/api/staff_payments'),
+        api.get<Debt[]>('/api/debts'),
+        api.get<Document[]>('/api/documents'),
+        get().hasPerm('seeAudit') ? api.get<AuditLog[]>('/api/audit_logs') : Promise.resolve([]),
       ])
 
       set({
-        settings: settingsRes.data as Settings,
-        classes: (classesRes.data ?? []) as Class[],
-        students: (studentsRes.data ?? []) as Student[],
-        payments: (paymentsRes.data ?? []) as Payment[],
-        reminders: (remindersRes.data ?? []) as Reminder[],
-        expenses: (expensesRes.data ?? []) as Expense[],
-        cashClosures: (closuresRes.data ?? []) as CashClosure[],
-        teachers: (teachersRes.data ?? []) as Teacher[],
-        teacherHours: (teacherHoursRes.data ?? []) as TeacherHour[],
-        staff: (staffRes.data ?? []) as Staff[],
-        staffPayments: (staffPaymentsRes.data ?? []) as StaffPayment[],
-        debts: (debtsRes.data ?? []) as Debt[],
-        documents: (documentsRes.data ?? []) as Document[],
-        auditLogs: (auditRes.data ?? []) as AuditLog[],
+        settings, classes, students, payments, reminders, expenses, cashClosures,
+        teachers, teacherHours, staff, staffPayments, debts, documents, auditLogs,
         loading: false,
       })
 
-      // Subscribe to realtime changes
-      setupRealtime(set, get)
+      if (disconnect) disconnect()
+      disconnect = connectRealtime((table) => {
+        get().refreshTable(table)
+      })
     } catch (e) {
       console.error('Erreur chargement données', e)
       set({ loading: false })
     }
   },
 
-  logAudit: async (action, entity, reference = '', details = '') => {
-    const { role } = get()
-    const roleLabel = role ? ROLES[role].label : 'Inconnu'
+  refreshTable: async (table) => {
+    const mapping = TABLE_MAP[table]
+    if (!mapping) return
     try {
-      await supabase.from('audit_logs').insert({
-        date: new Date().toISOString(),
-        user_role: roleLabel,
-        action, entity, reference, details,
-      })
+      const data = await api.get(mapping.path)
+      set({ [mapping.key]: data } as Partial<AppStore>)
     } catch (e) {
-      console.error('Audit log failed', e)
+      console.error(`Erreur rafraîchissement ${table}`, e)
     }
   },
 
@@ -223,35 +257,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 }))
 
-function setupRealtime(
-  set: (state: Partial<AppStore>) => void,
-  get: () => AppStore
-) {
-  // Unsubscribe previous
-  subs.forEach(fn => fn())
-  subs.length = 0
-
-  const sub = (table: string, key: keyof AppStore) => {
-    const ch = supabase.channel(`rt-${table}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, async () => {
-        const { data } = await supabase.from(table).select('*')
-          .order(table === 'cash_closures' ? 'date' : (table === 'audit_logs' ? 'date' : 'created_at'), { ascending: false })
-          .limit(table === 'students' ? 2000 : 500)
-        if (data) set({ [key]: data } as Partial<AppStore>)
-      })
-      .subscribe()
-    subs.push(() => supabase.removeChannel(ch))
-  }
-
-  sub('students', 'students')
-  sub('payments', 'payments')
-  sub('expenses', 'expenses')
-  sub('cash_closures', 'cashClosures')
-  sub('teacher_hours', 'teacherHours')
-  sub('staff_payments', 'staffPayments')
-  sub('debts', 'debts')
-  sub('audit_logs', 'auditLogs')
+// Restaure la session depuis localStorage au chargement du module (rafraîchissement de page).
+const storedUser = getStoredUser()
+if (storedUser) {
+  useAppStore.setState({ role: storedUser.role as RoleKey, userLabel: storedUser.label })
 }
 
-// Export ROLES type helper
 export type { RoleKey }

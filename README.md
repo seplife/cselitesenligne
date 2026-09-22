@@ -1,39 +1,67 @@
 # 🏫 CSE Divo — Gestion Financière Scolaire
 
-Application moderne de gestion financière pour établissements scolaires — **React 18 + TypeScript + Tailwind CSS + Supabase**
+Application de gestion financière pour établissements scolaires — **React 18 + TypeScript + Tailwind CSS**, backend **Node.js/Express + MySQL** avec authentification réelle et temps réel (Socket.IO).
 
-## 🚀 Installation rapide
+## Architecture
 
-### 1. Créer votre projet Supabase
-
-1. Allez sur [supabase.com](https://supabase.com) et créez un compte (gratuit)
-2. Créez un nouveau projet
-3. Notez l'**URL du projet** et la **clé anon** (dans Paramètres > API)
-
-### 2. Configurer la base de données
-
-Dans votre projet Supabase, allez dans **SQL Editor** et collez tout le contenu du fichier :
 ```
-supabase/migrations/001_initial.sql
+gesfinancelites/
+├── src/               Frontend React (Vite)
+├── server/             API Express + MySQL
+│   ├── src/db/          Schéma SQL, migration, seed
+│   ├── src/routes/      Routes REST par module
+│   ├── src/middleware/  Authentification JWT, gestion d'erreurs
+│   └── src/server.js    Point d'entrée (Express + Socket.IO)
+├── docker-compose.yml   MySQL + API + frontend + Adminer, prêts à l'emploi
+└── Dockerfile            Build du frontend (nginx)
 ```
-Cliquez **Run** pour créer toutes les tables.
 
-### 3. Configurer l'application
+Le frontend ne parle **jamais** directement à la base de données : toutes les lectures et écritures passent par l'API Express, qui applique les permissions par rôle côté serveur (`server/src/roles.js`) — c'est ce qui protège réellement les données, contrairement à l'ancienne version qui exposait une clé Supabase publique sans authentification.
 
-Copiez le fichier `.env.example` en `.env` et remplissez vos valeurs :
+### Périmètre fonctionnel
+
+- **CRUD complet** (créer / modifier / historiser) : élèves, paiements, dépenses, clôtures de caisse, classes.
+- **Lecture seule** (données migrées, pas de nouveaux formulaires dans cette version) : relances, vacataires, heures de vacation, personnel, paies du personnel, dettes, documents, journal d'audit.
+
+## 🚀 Démarrage rapide avec Docker (recommandé)
+
+Le moyen le plus simple de lancer l'application complète (MySQL + API + frontend), quel que soit l'endroit où vous l'hébergez ensuite.
 
 ```bash
+cp .env.docker.example .env
+# Éditez .env : changez au minimum JWT_SECRET et les mots de passe MySQL
+
+docker compose up -d --build
+```
+
+- Frontend : http://localhost:8080
+- API : http://localhost:4000
+- Adminer (interface d'administration MySQL) : http://localhost:8081
+
+Au premier démarrage, le conteneur `api` applique automatiquement le schéma et crée les comptes de démonstration (voir *Connexion* ci-dessous). C'est sans risque de relancer `docker compose up` plus tard : la migration et le seed sont idempotents (ils ne recréent rien qui existe déjà).
+
+## 💻 Développement local sans Docker
+
+Nécessite Node.js 20+ et un serveur MySQL 8 (ou MariaDB 10.11+) accessible.
+
+### 1. Backend
+
+```bash
+cd server
 cp .env.example .env
+# Éditez .env avec les identifiants de votre base MySQL
+
+npm install
+npm run setup   # applique le schéma puis crée les comptes/classes de démo
+npm run dev     # démarre l'API sur http://localhost:4000
 ```
 
-```env
-VITE_SUPABASE_URL=https://votre-projet.supabase.co
-VITE_SUPABASE_ANON_KEY=votre-anon-key
-```
+### 2. Frontend
 
-### 4. Installer et lancer
+Dans un second terminal, à la racine du projet :
 
 ```bash
+cp .env.example .env   # VITE_API_URL=http://localhost:4000 par défaut
 npm install
 npm run dev
 ```
@@ -44,84 +72,60 @@ Ouvrez [http://localhost:5173](http://localhost:5173)
 
 ## 🔐 Connexion
 
-| Profil | PIN par défaut | Accès |
+Chaque profil dispose désormais d'un **compte réel** (mot de passe haché en base, plus de code PIN partagé lisible par n'importe qui) :
+
+| Profil | Mot de passe par défaut | Accès |
 |---|---|---|
 | 👔 Directeur | `1234` | Accès total |
-| 💰 Caissière | `0000` | Paiements, caisse |
+| 💰 Caissière | `0000` | Élèves, paiements, caisse |
 | 🗂️ Secrétaire | `0000` | Élèves, documents |
 | 🎒 Éducateur | `0000` | Consultation |
-| 📊 Comptable | `0000` | Statistiques, audit |
+| 📊 Comptable | `0000` | Statistiques, journal d'audit |
 | 👁️ Consultation | `0000` | Lecture seule |
 
-> Modifiez les PINs dans **Paramètres** (accès Directeur uniquement)
+> ⚠️ **Changez ces mots de passe avant toute utilisation en production.** Le Directeur peut réinitialiser le mot de passe de n'importe quel profil (API `PUT /api/auth/reset-password`) ; chaque profil peut changer le sien depuis l'application une fois cette fonctionnalité exposée dans l'interface, ou via `PUT /api/auth/password`.
 
 ---
 
-## 📱 Fonctionnalités
+## 🌐 Déploiement en production
 
-| Module | Description |
-|---|---|
-| 📊 Tableau de bord | KPIs temps réel, graphiques, alertes |
-| 🔐 Coffre-fort | Vue synthétique financière (Directeur) |
-| 🎓 Élèves | CRUD, fiches détaillées, export Excel/PDF |
-| 💵 Paiements | Enregistrement, reçus imprimables |
-| 🔳 QR & Scanner | Génération QR par élève, carte scolaire |
-| 🔔 Relances | Liste impayés, messages SMS/WhatsApp |
-| 📈 Statistiques | Recouvrement par classe et niveau |
-| ⚠️ Alertes | Détection anomalies automatiques |
-| 💰 Caisse & Dépenses | Journal quotidien, workflow validation |
-| 🧑‍🏫 Vacataires | Heures, validation, paiements |
-| 👥 Personnel | Paie mensuelle, bulletins |
-| 🗓️ Calendrier | Vue mensuelle des paiements |
-| 💳 Dettes | Suivi des engagements |
-| 📁 Documents | Gestion documentaire |
-| 🕵️ Audit | Journal complet des actions |
-| 🏷️ Classes | Configuration frais de scolarité |
-| ⚙️ Paramètres | PINs, paramètres école |
+L'API et le frontend sont deux services indépendants (le frontend appelle l'API via `VITE_API_URL`). Vous pouvez les héberger ensemble ou séparément.
+
+### Option 1 — Un VPS (le plus simple à maîtriser entièrement)
+
+1. Installez Docker et Docker Compose sur le VPS.
+2. Copiez le projet sur le serveur (`git clone` ou upload).
+3. `cp .env.docker.example .env`, renseignez `JWT_SECRET`, les mots de passe MySQL, `CORS_ORIGIN` (l'URL publique de votre frontend) et `VITE_API_URL` (l'URL publique de votre API).
+4. `docker compose up -d --build`
+5. Mettez un reverse proxy devant (Nginx ou Caddy) pour le HTTPS avec Let's Encrypt, pointant vers les ports 8080 (frontend) et 4000 (API).
+
+### Option 2 — Railway / Render (hébergement géré)
+
+1. Créez un service **MySQL** managé (Railway propose un plugin MySQL en un clic ; Render propose PostgreSQL nativement mais pas MySQL géré — dans ce cas, utilisez [PlanetScale](https://planetscale.com) ou un VPS pour la base).
+2. Créez un service **Web** à partir de `server/` (Dockerfile fourni, ou `npm install && npm run setup && npm start` comme commande de démarrage). Renseignez les variables d'environnement (`DATABASE_URL` ou `DB_HOST`/`DB_USER`/`DB_PASSWORD`/`DB_NAME`, `JWT_SECRET`, `CORS_ORIGIN`).
+3. Créez un service **Static Site** ou **Web** à partir de la racine du projet pour le frontend (`npm run build`, dossier de sortie `dist/`). Renseignez `VITE_API_URL` avec l'URL du service backend.
+4. Une fois les deux services démarrés, exécutez une fois `npm run setup` dans le service backend (console Railway/Render) pour créer le schéma et les comptes.
+
+### Option 3 — Base de données externe + hébergement au choix
+
+L'API ne dépend que d'une URL MySQL standard (`DATABASE_URL=mysql://user:pass@host:3306/db`). Vous pouvez donc utiliser n'importe quel MySQL managé (PlanetScale, AWS RDS, DigitalOcean Managed MySQL…) avec n'importe quel hébergeur Node.js (Railway, Render, Fly.io, un VPS…).
 
 ---
+
+## 🔌 Temps réel
+
+Le frontend se connecte en Socket.IO à l'API (authentifié par le même token JWT) et reçoit un événement `data:changed` à chaque création/modification, ce qui déclenche un rechargement automatique de la table concernée — sans qu'aucun utilisateur n'ait besoin de rafraîchir la page.
+
+## 🗄️ Sauvegardes
+
+Avec Docker, les données MySQL sont stockées dans le volume nommé `mysql_data`. Pour une sauvegarde manuelle :
+
+```bash
+docker compose exec mysql mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" gesfinancelites > backup.sql
+```
 
 ## 🛠️ Stack technique
 
-- **React 18** + **TypeScript**
-- **Tailwind CSS v3** (dark mode inclus)
-- **Supabase** (PostgreSQL cloud + Realtime)
-- **Zustand** (state management)
-- **Recharts** (graphiques)
-- **jsPDF + autoTable** (export PDF)
-- **XLSX** (export Excel)
-- **Lucide React** (icônes)
-- **Vite** (build tool)
-
----
-
-## 📁 Structure
-
-```
-src/
-├── components/
-│   ├── layout/       # Sidebar, Layout
-│   └── ui/           # Button, Card, Modal, Table, Badge, FormFields
-├── lib/
-│   ├── supabase.ts   # Client Supabase
-│   ├── utils.ts      # Formatage, dates, calculs
-│   └── exports.ts    # PDF & Excel
-├── pages/            # 17 pages
-├── store/            # Zustand store (données + permissions)
-├── types/            # Types TypeScript
-└── App.tsx           # Routing principal
-```
-
----
-
-## 🔄 Mise à jour
-
-```bash
-git pull
-npm install
-npm run build
-```
-
----
-
-*Développé pour le Cours Secondaire Élites Divo — Côte d'Ivoire* 🇨🇮
+- **Frontend** : React 18, TypeScript, Vite, Tailwind CSS, Zustand, Socket.IO client
+- **Backend** : Node.js, Express, MySQL (mysql2), JWT (jsonwebtoken), bcrypt, Zod, Socket.IO
+- **Sécurité** : mots de passe hachés (bcrypt), permissions par rôle appliquées côté serveur, limitation du taux de connexion, en-têtes de sécurité (helmet)

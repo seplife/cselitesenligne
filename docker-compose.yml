@@ -1,0 +1,62 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${DB_NAME:-gesfinancelites}
+      MYSQL_USER: ${DB_USER:-gesfin}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-gesfin_pass}
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-p${MYSQL_ROOT_PASSWORD:-rootpass}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-gesfin}
+      DB_PASSWORD: ${DB_PASSWORD:-gesfin_pass}
+      DB_NAME: ${DB_NAME:-gesfinancelites}
+      JWT_SECRET: ${JWT_SECRET:?Définissez JWT_SECRET dans votre fichier .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PORT: 4000
+    ports:
+      - '4000:4000'
+    # Applique le schéma (idempotent) puis seed les comptes/classes de démo
+    # au premier démarrage, avant de lancer le serveur.
+    command: sh -c "npm run migrate && npm run seed && npm start"
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '8080:80'
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    ports:
+      - '8081:8080'
+
+volumes:
+  mysql_data:

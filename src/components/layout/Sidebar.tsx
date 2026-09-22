@@ -35,14 +35,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
-  const { role, activeTab, setActiveTab, setRole, logAudit, hasTab, computeAlerts, settings } = useAppStore()
+  const { role, activeTab, setActiveTab, logout, hasTab, computeAlerts, settings } = useAppStore()
   const alerts = computeAlerts()
   const alertCount = alerts.length
   const roleDef = role ? ROLES[role] : null
 
   const handleLogout = async () => {
-    await logAudit('DECONNEXION', 'Session', roleDef?.label ?? '', 'Déconnexion')
-    setRole(null)
+    await logout()
   }
 
   return (

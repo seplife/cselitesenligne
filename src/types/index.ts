@@ -38,7 +38,6 @@ export interface Settings {
   telephone?: string;
   email?: string;
   annee_scolaire: string;
-  pins: Record<RoleKey, string>;
   matricule_counter: number;
   recu_counter: number;
   dep_counter: number;

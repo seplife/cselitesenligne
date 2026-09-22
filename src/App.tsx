@@ -2,7 +2,7 @@ import React, { useEffect, Suspense, lazy } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Layout } from '@/components/layout/Layout'
 import Login from '@/pages/Login'
-import { supabase } from '@/lib/supabase'
+import { getToken } from '@/lib/apiClient'
 import { Loader2 } from 'lucide-react'
 
 // Lazy load pages for performance
@@ -64,22 +64,23 @@ function PageFallback() {
   )
 }
 
-function SupabaseErrorMessage() {
+function ApiErrorMessage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-red-100">
         <div className="text-5xl mb-4">⚠️</div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Configuration Supabase manquante</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Serveur injoignable</h2>
         <p className="text-gray-500 text-sm mb-4">
-          Créez un fichier <code className="bg-gray-100 px-1.5 py-0.5 rounded">.env</code> à la racine du projet avec :
+          Impossible de contacter l'API. Vérifiez que le serveur backend est démarré et que
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded mx-1">VITE_API_URL</code>
+          pointe vers la bonne adresse dans le fichier <code className="bg-gray-100 px-1.5 py-0.5 rounded">.env</code>.
         </p>
-        <pre className="bg-gray-50 rounded-lg p-3 text-left text-xs text-gray-700 border border-gray-200 overflow-auto">
-{`VITE_SUPABASE_URL=https://xxx.supabase.co
-VITE_SUPABASE_ANON_KEY=votre-anon-key`}
-        </pre>
-        <p className="text-gray-400 text-xs mt-4">
-          Puis relancez l'application avec <code className="bg-gray-100 px-1 rounded">npm run dev</code>
-        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700"
+        >
+          Réessayer
+        </button>
       </div>
     </div>
   )
@@ -91,11 +92,8 @@ export default function App() {
   const [initialized, setInitialized] = React.useState(false)
 
   useEffect(() => {
-    // Check Supabase connection
-    const url = import.meta.env.VITE_SUPABASE_URL
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-    if (!url || !key || url.includes('votre-projet')) {
-      setInitError(true)
+    // Pas de session locale : on affiche directement l'écran de connexion.
+    if (!getToken()) {
       setInitialized(true)
       return
     }
@@ -110,7 +108,7 @@ export default function App() {
   }, [])
 
   if (!initialized || loading) return <AppLoader />
-  if (initError) return <SupabaseErrorMessage />
+  if (initError) return <ApiErrorMessage />
   if (!role) return <Login />
 
   // Get active page component
