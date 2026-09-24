@@ -2,7 +2,9 @@
 // via fetch, avec un token JWT stocké en localStorage et attaché à chaque
 // requête authentifiée.
 
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:4000'
+// En développement : API_URL = '' → les requêtes '/api/...' passent par le proxy Vite (→ localhost:4000).
+// En production  : définir VITE_API_URL avec l'URL complète du serveur.
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
 const TOKEN_KEY = 'gesfin_token'
 const USER_KEY = 'gesfin_user'

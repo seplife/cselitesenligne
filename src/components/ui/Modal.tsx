@@ -6,20 +6,22 @@ interface ModalProps {
   open: boolean
   onClose: () => void
   title?: string
+  subtitle?: string
   children: React.ReactNode
+  footer?: React.ReactNode
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 }
 
-const maxWidths = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-lg',
-  xl: 'max-w-xl',
-  '2xl': 'max-w-2xl',
+const maxWidths: Record<string, string> = {
+  sm:   'max-w-sm',
+  md:   'max-w-md',
+  lg:   'max-w-lg',
+  xl:   'max-w-xl',
+  '2xl':'max-w-2xl',
 }
 
-export function Modal({ open, onClose, title, children, maxWidth = 'md' }: ModalProps) {
-  // Close on Escape
+export function Modal({ open, onClose, title, subtitle, children, footer, maxWidth = 'md' }: ModalProps) {
+  // Fermeture sur Echap
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -27,7 +29,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'md' }: Modal
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  // Prevent body scroll
+  // Bloquer le scroll
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden'
     else document.body.style.overflow = ''
@@ -38,33 +40,37 @@ export function Modal({ open, onClose, title, children, maxWidth = 'md' }: Modal
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className={cn(
-        'relative w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-h-[90vh] overflow-y-auto',
-        maxWidths[maxWidth]
-      )}>
+      <div className={cn('modal-box', maxWidths[maxWidth])}>
+        {/* En-tête */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
+          <div className="modal-header">
+            <div>
+              <h2 className="modal-title">{title}</h2>
+              {subtitle && <p className="text-sm text-surface-500 dark:text-surface-400 mt-0.5">{subtitle}</p>}
+            </div>
+            <button onClick={onClose} className="modal-close-btn">
               <X className="h-5 w-5" />
             </button>
           </div>
         )}
+
+        {/* Bouton fermeture sans titre */}
         {!title && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors z-10"
-          >
+          <button onClick={onClose} className="modal-close-btn absolute top-4 right-4 z-10">
             <X className="h-5 w-5" />
           </button>
         )}
-        <div className="p-6">{children}</div>
+
+        {/* Corps */}
+        <div className="modal-body">{children}</div>
+
+        {/* Pied optionnel */}
+        {footer && (
+          <div className="modal-footer">{footer}</div>
+        )}
       </div>
     </div>
   )

@@ -10,7 +10,9 @@ export function connectRealtime(onChange: (table: string) => void): () => void {
   const token = getToken()
   if (!token) return () => {}
 
-  socket = io(API_URL, { auth: { token }, transports: ['websocket', 'polling'] })
+  // Socket.IO nécessite une URL absolue même en dev (les WS ne transitent pas par le proxy Vite HTTP)
+  const socketUrl = API_URL || 'http://localhost:4000'
+  socket = io(socketUrl, { auth: { token }, transports: ['websocket', 'polling'] })
 
   socket.on('data:changed', (payload: { table: string }) => {
     onChange(payload.table)
