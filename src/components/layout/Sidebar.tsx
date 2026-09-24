@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import type { TabId, RoleKey } from '@/types'
 import { useState } from 'react'
-import logoCse from '@/assets/logo_cse.png'
 
 const NAV_ITEMS: { id: TabId; icon: React.ReactNode; label: string }[] = [
   { id: 'dashboard', icon: <LayoutDashboard className="h-4 w-4" />, label: 'Tableau de bord' },
@@ -54,7 +53,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700">
         {!collapsed && (
           <div className="flex items-center gap-2.5">
-            <img src={logoCse} alt="Logo" className="h-8 w-8 object-contain rounded-md flex-shrink-0" />
+            <span className="text-2xl">🏫</span>
             <div>
               <div className="font-extrabold text-primary-800 dark:text-primary-400 text-sm leading-tight">
                 {settings?.sigle ?? 'CSE Divo'}
@@ -63,7 +62,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </div>
           </div>
         )}
-        {collapsed && <img src={logoCse} alt="Logo" className="h-8 w-8 object-contain rounded-md mx-auto" />}
+        {collapsed && <span className="text-2xl mx-auto">🏫</span>}
         {onToggle && (
           <button
             onClick={onToggle}

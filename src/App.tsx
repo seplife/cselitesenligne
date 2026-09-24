@@ -2,9 +2,8 @@ import React, { useEffect, Suspense, lazy } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Layout } from '@/components/layout/Layout'
 import Login from '@/pages/Login'
-import { getToken, API_URL } from '@/lib/apiClient'
-import { Loader2, ServerCrash } from 'lucide-react'
-import logoCse from '@/assets/logo_cse.png'
+import { getToken } from '@/lib/apiClient'
+import { Loader2 } from 'lucide-react'
 
 // Lazy load pages for performance
 const Dashboard      = lazy(() => import('@/pages/Dashboard'))
@@ -47,11 +46,15 @@ const PAGE_MAP = {
 
 function AppLoader() {
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900">
       <div className="text-center">
-        <img src={logoCse} alt="Logo" className="h-16 w-16 object-contain mx-auto mb-4" />
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto" />
-        <p className="text-gray-500 mt-3 text-sm">Chargement en cours…</p>
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white dark:bg-gray-800 shadow-xl mb-5 border border-gray-100 dark:border-gray-700">
+          <span className="text-4xl">🏫</span>
+        </div>
+        <div className="flex items-center gap-2 justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-red-600" />
+          <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Chargement en cours…</p>
+        </div>
       </div>
     </div>
   )
@@ -60,7 +63,7 @@ function AppLoader() {
 function PageFallback() {
   return (
     <div className="flex items-center justify-center py-20">
-      <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+      <Loader2 className="h-6 w-6 animate-spin text-red-600" />
     </div>
   )
 }
@@ -68,25 +71,21 @@ function PageFallback() {
 function ApiErrorMessage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8 text-center border border-red-100 dark:border-red-900/40">
-        <div className="h-12 w-12 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
-          <ServerCrash className="h-6 w-6 text-red-600 dark:text-red-400" />
+      <div className="max-w-sm w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 text-center border border-red-100 dark:border-red-900/30">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 mb-5">
+          <span className="text-3xl">⚠️</span>
         </div>
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Serveur injoignable</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
-          Impossible de contacter l'API à cette adresse :
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
+          Le serveur backend ne répond pas. Assurez-vous qu'il est bien démarré sur le port 4000.
         </p>
-        <code className="block my-2 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs break-all">
-          {API_URL}
-        </code>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-          Vérifiez que le serveur backend est démarré et que
-          <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded mx-1">VITE_API_URL</code>
-          pointe vers la bonne adresse (variable d'environnement de votre hébergeur, ex. Vercel).
-        </p>
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-left text-xs font-mono text-gray-600 dark:text-gray-400 mb-5">
+          <div className="text-gray-400 mb-1"># Dans le dossier server/</div>
+          <div className="text-green-600 dark:text-green-400">npm run dev</div>
+        </div>
         <button
           onClick={() => window.location.reload()}
-          className="mt-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700"
+          className="w-full px-4 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white text-sm font-bold transition-colors shadow-sm"
         >
           Réessayer
         </button>
