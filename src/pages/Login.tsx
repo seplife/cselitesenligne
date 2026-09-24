@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/FormFields'
 import toast from 'react-hot-toast'
 import logoCse from '@/assets/logo_cse.png'
+import { ServerUnreachableNotice } from '@/components/ui/ServerUnreachableNotice'
 
 export default function Login() {
   const { login } = useAppStore()
@@ -13,17 +14,25 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
+  const [serverUnreachable, setServerUnreachable] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!username.trim() || !password) return
     setLoading(true)
+    setServerUnreachable(false)
     try {
       await login(username.trim(), password)
       toast.success('Connexion réussie !')
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Connexion impossible. Vérifiez le serveur.'
-      toast.error(message)
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        // fetch() a échoué avant même d'atteindre le serveur : mauvaise URL,
+        // API non déployée, ou API arrêtée. On l'explique clairement plutôt
+        // qu'un simple toast qui disparaît.
+        setServerUnreachable(true)
+      }
       setPassword('')
     } finally {
       setLoading(false)
@@ -94,6 +103,8 @@ export default function Login() {
             </Button>
           </form>
 
+          {serverUnreachable && <ServerUnreachableNotice />}
+
           <div className="mt-5 text-center border-t border-gray-100 dark:border-gray-700 pt-4">
             <p className="text-sm text-gray-500">Pas encore de compte ?</p>
             <button
@@ -130,6 +141,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [serverUnreachable, setServerUnreachable] = useState(false)
 
   const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
 
@@ -144,12 +156,16 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
       return
     }
     setLoading(true)
+    setServerUnreachable(false)
     try {
       await register({ username: form.username.trim(), nom_complet: form.nom_complet.trim(), role: form.role, password: form.password })
       toast.success('Compte créé avec succès ! Bienvenue 🎉')
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Erreur lors de la création du compte.'
-      toast.error(message)
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        setServerUnreachable(true)
+      }
     } finally {
       setLoading(false)
     }
@@ -231,6 +247,8 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
               Créer mon compte
             </Button>
           </form>
+
+          {serverUnreachable && <ServerUnreachableNotice />}
 
           <div className="mt-4 text-center border-t border-gray-100 dark:border-gray-700 pt-4">
             <button

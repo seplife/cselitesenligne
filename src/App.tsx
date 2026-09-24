@@ -2,8 +2,9 @@ import React, { useEffect, Suspense, lazy } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Layout } from '@/components/layout/Layout'
 import Login from '@/pages/Login'
-import { getToken } from '@/lib/apiClient'
-import { Loader2 } from 'lucide-react'
+import { getToken, API_URL } from '@/lib/apiClient'
+import { Loader2, ServerCrash } from 'lucide-react'
+import logoCse from '@/assets/logo_cse.png'
 
 // Lazy load pages for performance
 const Dashboard      = lazy(() => import('@/pages/Dashboard'))
@@ -48,7 +49,7 @@ function AppLoader() {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-950">
       <div className="text-center">
-        <div className="text-5xl mb-4">🏫</div>
+        <img src={logoCse} alt="Logo" className="h-16 w-16 object-contain mx-auto mb-4" />
         <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto" />
         <p className="text-gray-500 mt-3 text-sm">Chargement en cours…</p>
       </div>
@@ -66,14 +67,22 @@ function PageFallback() {
 
 function ApiErrorMessage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-red-100">
-        <div className="text-5xl mb-4">⚠️</div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Serveur injoignable</h2>
-        <p className="text-gray-500 text-sm mb-4">
-          Impossible de contacter l'API. Vérifiez que le serveur backend est démarré et que
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded mx-1">VITE_API_URL</code>
-          pointe vers la bonne adresse dans le fichier <code className="bg-gray-100 px-1.5 py-0.5 rounded">.env</code>.
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
+      <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8 text-center border border-red-100 dark:border-red-900/40">
+        <div className="h-12 w-12 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+          <ServerCrash className="h-6 w-6 text-red-600 dark:text-red-400" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Serveur injoignable</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
+          Impossible de contacter l'API à cette adresse :
+        </p>
+        <code className="block my-2 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs break-all">
+          {API_URL}
+        </code>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+          Vérifiez que le serveur backend est démarré et que
+          <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded mx-1">VITE_API_URL</code>
+          pointe vers la bonne adresse (variable d'environnement de votre hébergeur, ex. Vercel).
         </p>
         <button
           onClick={() => window.location.reload()}

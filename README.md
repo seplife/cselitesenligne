@@ -110,6 +110,23 @@ L'API et le frontend sont deux services indépendants (le frontend appelle l'API
 
 L'API ne dépend que d'une URL MySQL standard (`DATABASE_URL=mysql://user:pass@host:3306/db`). Vous pouvez donc utiliser n'importe quel MySQL managé (PlanetScale, AWS RDS, DigitalOcean Managed MySQL…) avec n'importe quel hébergeur Node.js (Railway, Render, Fly.io, un VPS…).
 
+### Option 4 — Vercel (frontend) + Railway (backend) — ce dépôt
+
+> ⚠️ **Vercel n'héberge que le frontend statique.** Si vous avez importé ce dépôt directement dans Vercel sans déployer `server/` ailleurs, l'application affichera "Connexion impossible. Vérifiez le serveur." / "Erreur lors de la création du compte." — c'est normal : il n'y a aucune API à joindre. Voici la marche à suivre complète :
+
+1. **Déployez le backend sur Railway** (gratuit pour démarrer) :
+   - [railway.app](https://railway.app) → *New Project* → *Provision MySQL* (base gérée en un clic).
+   - Toujours dans le même projet Railway : *New* → *GitHub Repo* → sélectionnez ce dépôt, puis dans les *Settings* du service, mettez **Root Directory** = `server`.
+   - Dans les variables d'environnement du service backend, ajoutez : `JWT_SECRET` (une longue valeur aléatoire), `CORS_ORIGIN` (l'URL de votre site Vercel, ex. `https://gesfinancelites.vercel.app`), et les identifiants MySQL (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT` — Railway les fournit sur le service MySQL, onglet *Variables*).
+   - Une fois déployé, ouvrez la console du service (*Settings* → *Deploy* → *Shell*, ou en local avec `railway run`) et exécutez `npm run setup` une seule fois pour créer les tables et les comptes de démonstration.
+   - Notez l'URL publique générée par Railway pour ce service (*Settings* → *Networking* → *Generate Domain*), par ex. `https://gesfinancelites-api.up.railway.app`.
+
+2. **Configurez le frontend sur Vercel** :
+   - Project → *Settings* → *Environment Variables* → ajoutez `VITE_API_URL` = l'URL Railway obtenue ci-dessus (sans `/` final).
+   - **Redéployez** (*Deployments* → ⋯ → *Redeploy*) : `VITE_API_URL` est injectée au moment du `build`, donc une variable ajoutée après coup n'a aucun effet tant qu'on n'a pas relancé un build.
+
+3. Une fois les deux redéployés, la connexion et la création de compte fonctionneront normalement.
+
 ---
 
 ## 🔌 Temps réel

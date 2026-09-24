@@ -26,12 +26,15 @@ async function seed() {
     console.log('Insertion des données de démonstration…')
 
     for (const { role, label, password } of ROLES) {
-      const [existing] = await pool.query('SELECT id FROM users WHERE role = ?', [role])
+      // username = role par défaut (ex: "directeur") — l'utilisateur peut en
+      // créer d'autres depuis l'écran "Créer un compte" avec un vrai username.
+      const [existing] = await pool.query('SELECT id FROM users WHERE username = ?', [role])
       if (existing.length > 0) continue
       const hash = await bcrypt.hash(password, 10)
-      await pool.query('INSERT INTO users (id, role, label, password_hash) VALUES (?,?,?,?)', [
-        uuid(), role, label, hash,
-      ])
+      await pool.query(
+        'INSERT INTO users (id, username, nom_complet, role, password_hash) VALUES (?,?,?,?,?)',
+        [uuid(), role, label, role, hash]
+      )
     }
 
     for (const [nom, niveau] of CLASSES) {
