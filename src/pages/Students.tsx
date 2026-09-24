@@ -16,6 +16,7 @@ const STATUT_COLORS: Record<string, string> = {
 }
 
 interface StudentFormState {
+  matricule: string
   nom: string
   prenoms: string
   sexe: 'M' | 'F'
@@ -27,7 +28,7 @@ interface StudentFormState {
 }
 
 const EMPTY_FORM: StudentFormState = {
-  nom: '', prenoms: '', sexe: 'M', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0',
+  matricule: '', nom: '', prenoms: '', sexe: 'M', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0',
 }
 
 export default function Students() {
@@ -62,6 +63,7 @@ export default function Students() {
 
   function openEdit(s: Student) {
     setForm({
+      matricule: s.matricule ?? '',
       nom: s.nom, prenoms: s.prenoms, sexe: s.sexe, date_naissance: s.date_naissance ?? '',
       classe_id: s.classe_id ?? '', parent_nom: s.parent_nom ?? '', parent_tel: s.parent_tel ?? '',
       frais_additionnels: String(s.frais_additionnels ?? 0),
@@ -71,6 +73,10 @@ export default function Students() {
 
   async function handleSubmitStudent(e: React.FormEvent) {
     e.preventDefault()
+    if (!form.matricule.trim()) {
+      toast.error('Le matricule est requis.')
+      return
+    }
     if (!form.nom.trim() || !form.prenoms.trim()) {
       toast.error('Nom et prénoms requis.')
       return
@@ -78,6 +84,7 @@ export default function Students() {
     setSaving(true)
     try {
       const payload = {
+        matricule: form.matricule.trim().toUpperCase(),
         nom: form.nom.trim(),
         prenoms: form.prenoms.trim(),
         sexe: form.sexe,
@@ -242,8 +249,19 @@ export default function Students() {
         maxWidth="lg"
       >
         <form onSubmit={handleSubmitStudent} className="space-y-4">
+          {/* Matricule — saisi manuellement */}
+          <Input
+            label="Matricule *"
+            value={form.matricule}
+            onChange={e => setForm(f => ({ ...f, matricule: e.target.value.toUpperCase() }))}
+            placeholder="Ex : CSE-2025-001"
+            required
+            autoFocus
+            hint={studentModal.editing ? 'Modifiable si erreur de saisie initiale.' : 'Identifiant unique de l\'élève — saisir manuellement.'}
+            className="font-mono tracking-widest"
+          />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Nom" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} required autoFocus />
+            <Input label="Nom" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} required />
             <Input label="Prénoms" value={form.prenoms} onChange={e => setForm(f => ({ ...f, prenoms: e.target.value }))} required />
           </div>
           <div className="grid grid-cols-2 gap-3">
