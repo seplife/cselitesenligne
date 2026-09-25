@@ -12,7 +12,7 @@ export default function Stats() {
     const eleves = actifs.filter(s => s.classe_id === c.id)
     const attendu = eleves.reduce((a, s) => a + s.total_du, 0)
     const encaisse = eleves.reduce((a, s) => a + s.total_paye, 0)
-    const reste = attendu - encaisse
+    const reste = eleves.reduce((a, s) => a + Math.max(0, s.total_du - s.total_paye), 0)
     const soldes = eleves.filter(s => s.statut === 'SOLDE' || s.statut === 'CREDIT').length
     return {
       classe: c.nom,
@@ -21,7 +21,7 @@ export default function Stats() {
       attendu,
       encaisse,
       reste,
-      taux: attendu > 0 ? Math.round((encaisse / attendu) * 100) : 0,
+      taux: attendu > 0 ? Math.min(100, Math.round(((attendu - reste) / attendu) * 100)) : 0,
       soldes,
       nonSoldes: eleves.length - soldes,
     }
@@ -29,7 +29,7 @@ export default function Stats() {
 
   const globalAttend = actifs.reduce((a, s) => a + s.total_du, 0)
   const globalEnc = actifs.reduce((a, s) => a + s.total_paye, 0)
-  const globalTaux = globalAttend > 0 ? Math.round((globalEnc / globalAttend) * 100) : 0
+  const globalTaux = globalAttend > 0 ? Math.min(100, Math.round((globalEnc / globalAttend) * 100)) : 0
 
   return (
     <div className="space-y-6">

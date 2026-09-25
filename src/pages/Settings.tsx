@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { api } from '@/lib/apiClient'
+import { api, ApiError } from '@/lib/apiClient'
 import { fmt } from '@/lib/utils'
-import { Settings as SettingsIcon, Save } from 'lucide-react'
+import { Settings as SettingsIcon, Save, KeyRound, Users, HardDrive } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { ChangePasswordForm, UsersManager, BackupTools, SectionTitle } from '@/components/AccountTools'
 import type { Settings as SettingsType } from '@/types'
 
 export default function Settings() {
@@ -33,6 +35,7 @@ export default function Settings() {
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
       console.error(e)
+      toast.error(e instanceof ApiError ? e.message : 'Enregistrement impossible.')
     } finally {
       setSaving(false)
     }
@@ -84,12 +87,27 @@ export default function Settings() {
         className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
           saved
             ? 'bg-green-500 text-white'
-            : 'bg-primary-600 text-white hover:bg-primary-700'
+            : 'bg-red-700 text-white hover:bg-red-800'
         }`}
       >
         <Save className="h-4 w-4" />
         {saving ? 'Enregistrement…' : saved ? 'Enregistré ✓' : 'Enregistrer'}
       </button>
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 space-y-4">
+        <SectionTitle icon={<HardDrive className="h-4 w-4" />}>Sauvegarde des données</SectionTitle>
+        <BackupTools />
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 space-y-4">
+        <SectionTitle icon={<KeyRound className="h-4 w-4" />}>Mon mot de passe</SectionTitle>
+        <ChangePasswordForm />
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 space-y-2">
+        <SectionTitle icon={<Users className="h-4 w-4" />}>Comptes utilisateurs</SectionTitle>
+        <UsersManager />
+      </div>
     </div>
   )
 }

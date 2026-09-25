@@ -31,10 +31,12 @@ interface SearchInputProps {
 }
 
 export function Input({ label, error, hint, iconLeft, iconRight, className, ...props }: InputProps) {
+  const autoId = React.useId()
+  const fieldId = props.id ?? autoId
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="input-label">{label}</label>
+        <label className="input-label" htmlFor={fieldId}>{label}</label>
       )}
       <div className="input-group">
         {iconLeft && (
@@ -49,6 +51,7 @@ export function Input({ label, error, hint, iconLeft, iconRight, className, ...p
             className
           )}
           {...props}
+          id={fieldId}
         />
         {iconRight && (
           <span className="input-icon-right h-4 w-4">{iconRight}</span>
@@ -61,9 +64,11 @@ export function Input({ label, error, hint, iconLeft, iconRight, className, ...p
 }
 
 export function Select({ label, error, hint, options, className, ...props }: SelectProps) {
+  const autoId = React.useId()
+  const fieldId = props.id ?? autoId
   return (
     <div className="space-y-1.5">
-      {label && <label className="input-label">{label}</label>}
+      {label && <label className="input-label" htmlFor={fieldId}>{label}</label>}
       <select
         className={cn(
           'input-field cursor-pointer appearance-none',
@@ -71,6 +76,7 @@ export function Select({ label, error, hint, options, className, ...props }: Sel
           className
         )}
         {...props}
+        id={fieldId}
       >
         {options.map(opt => {
           if (typeof opt === 'string') return <option key={opt} value={opt}>{opt}</option>
@@ -84,12 +90,15 @@ export function Select({ label, error, hint, options, className, ...props }: Sel
 }
 
 export function Textarea({ label, error, hint, className, ...props }: TextAreaProps) {
+  const autoId = React.useId()
+  const fieldId = props.id ?? autoId
   return (
     <div className="space-y-1.5">
-      {label && <label className="input-label">{label}</label>}
+      {label && <label className="input-label" htmlFor={fieldId}>{label}</label>}
       <textarea
         className={cn('input-field resize-none', error && 'error', className)}
         {...props}
+        id={fieldId}
       />
       {error && <p className="input-error">{error}</p>}
       {hint && !error && <p className="input-helper">{hint}</p>}

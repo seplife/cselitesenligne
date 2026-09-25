@@ -4,4 +4,3 @@ dist/
 .env.*
 !.env.example
 *.log
-server_backup_20260924/

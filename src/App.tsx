@@ -2,7 +2,7 @@ import React, { useEffect, Suspense, lazy } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Layout } from '@/components/layout/Layout'
 import Login from '@/pages/Login'
-import { getToken } from '@/lib/apiClient'
+import { getToken, ApiError, API_URL } from '@/lib/apiClient'
 import { Loader2 } from 'lucide-react'
 
 // Lazy load pages for performance
@@ -77,12 +77,8 @@ function ApiErrorMessage() {
         </div>
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Serveur injoignable</h2>
         <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
-          Le serveur backend ne répond pas. Assurez-vous qu'il est bien démarré sur le port 4000.
+          Le serveur <span className="font-mono break-all">{API_URL}</span> ne répond pas. Vérifiez qu'il est bien démarré et accessible.
         </p>
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-left text-xs font-mono text-gray-600 dark:text-gray-400 mb-5">
-          <div className="text-gray-400 mb-1"># Dans le dossier server/</div>
-          <div className="text-green-600 dark:text-green-400">npm run dev</div>
-        </div>
         <button
           onClick={() => window.location.reload()}
           className="w-full px-4 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white text-sm font-bold transition-colors shadow-sm"
@@ -110,7 +106,8 @@ export default function App() {
       .then(() => setInitialized(true))
       .catch(e => {
         console.error('Init error', e)
-        setInitError(true)
+        // 401 : session expirée → le store renvoie déjà vers l'écran de connexion.
+        if (!(e instanceof ApiError && e.status === 401)) setInitError(true)
         setInitialized(true)
       })
   }, [])

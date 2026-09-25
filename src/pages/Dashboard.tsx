@@ -27,7 +27,8 @@ export default function Dashboard() {
   const soldes = actifs.filter(s => s.statut === 'SOLDE' || s.statut === 'CREDIT').length
   const totalDu = actifs.reduce((a, s) => a + s.total_du, 0)
   const totalPaye = actifs.reduce((a, s) => a + s.total_paye, 0)
-  const resteGlobal = totalDu - totalPaye
+  // Un élève en crédit (trop-perçu) ne réduit pas ce que les autres doivent encore.
+  const resteGlobal = actifs.reduce((a, s) => a + Math.max(0, s.total_du - s.total_paye), 0)
 
   const mois = monthKey()
   const encaisseMois = payments
@@ -86,7 +87,7 @@ export default function Dashboard() {
         <StatCard
           title="Reste à recouvrer"
           value={fmt(resteGlobal)}
-          sub={`${Math.round((totalPaye / (totalDu || 1)) * 100)}% recouvré`}
+          sub={totalDu > 0 ? `${Math.min(100, Math.round(((totalDu - resteGlobal) / totalDu) * 100))}% recouvré` : 'Aucun frais défini'}
           icon={<AlertTriangle className="h-5 w-5 text-orange-600" />}
           color="bg-orange-50 dark:bg-orange-900/30"
         />

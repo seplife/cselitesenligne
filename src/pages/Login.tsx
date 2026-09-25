@@ -1,28 +1,23 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { ApiError, API_URL } from '@/lib/apiClient'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/FormFields'
+import { ApiError, LOCAL_MODE, checkHealth } from '@/lib/apiClient'
 import toast from 'react-hot-toast'
 import logoCse from '@/assets/logo_cse.png'
-import { Eye, EyeOff, User, Lock, UserPlus, ChevronDown, Wifi, WifiOff, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, User, Lock, UserPlus, ChevronDown, Wifi, WifiOff, RefreshCw, HardDrive } from 'lucide-react'
 
 // ─── Vérification serveur ──────────────────────────────────────────────────────
 function useServerStatus() {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking')
 
   const check = async () => {
+    if (LOCAL_MODE) { setStatus('online'); return }
     setStatus('checking')
-    try {
-      const res = await fetch(`${API_URL}/api/health`, { signal: AbortSignal.timeout(4000) })
-      setStatus(res.ok ? 'online' : 'offline')
-    } catch {
-      setStatus('offline')
-    }
+    setStatus((await checkHealth()) ? 'online' : 'offline')
   }
 
   useEffect(() => {
     check()
+    if (LOCAL_MODE) return
     const timer = setInterval(check, 15000)
     return () => clearInterval(timer)
   }, [])
@@ -32,6 +27,14 @@ function useServerStatus() {
 
 // ─── Bandeau statut serveur ────────────────────────────────────────────────────
 function ServerBanner({ status, onRetry }: { status: string; onRetry: () => void }) {
+  if (LOCAL_MODE) {
+    return (
+      <div className="flex items-start gap-2 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 mb-4">
+        <HardDrive className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+        <span>Les données sont enregistrées sur cet appareil, dans ce navigateur. Pensez à exporter une sauvegarde régulièrement (Paramètres).</span>
+      </div>
+    )
+  }
   if (status === 'checking') {
     return (
       <div className="flex items-center gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 mb-4">
@@ -79,10 +82,8 @@ export default function Login() {
       await login(username.trim(), password)
       toast.success('Connexion réussie !')
     } catch (err) {
-      const message = err instanceof ApiError
-        ? err.message
-        : 'Impossible de joindre le serveur. Vérifiez qu\'il est démarré.'
-      toast.error(message)
+      console.error(err)
+      toast.error(err instanceof ApiError ? err.message : 'Une erreur inattendue est survenue. Réessayez.')
       setPassword('')
     } finally {
       setLoading(false)
@@ -205,6 +206,17 @@ export default function Login() {
               </button>
             </form>
 
+            {LOCAL_MODE && (
+              <details className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                <summary className="cursor-pointer font-semibold hover:text-gray-700 dark:hover:text-gray-200">Comptes par défaut</summary>
+                <p className="mt-2 leading-relaxed">
+                  Identifiant <span className="font-mono font-semibold">directeur</span>, mot de passe <span className="font-mono font-semibold">1234</span>.
+                  Autres profils : <span className="font-mono">caissiere</span>, <span className="font-mono">secretaire</span>, <span className="font-mono">educateur</span>, <span className="font-mono">comptable</span>, <span className="font-mono">consultation</span> — mot de passe <span className="font-mono font-semibold">0000</span>.
+                  Changez-les dans Paramètres après la première connexion.
+                </p>
+              </details>
+            )}
+
             <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800 text-center">
               <p className="text-sm text-gray-500 dark:text-gray-400">Pas encore de compte ?</p>
               <button
@@ -286,11 +298,8 @@ function RegisterForm({
       })
       toast.success('Compte créé avec succès ! Bienvenue 🎉')
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast.error(err.message)
-      } else {
-        toast.error('Impossible de joindre le serveur. Vérifiez qu\'il est démarré.')
-      }
+      console.error(err)
+      toast.error(err instanceof ApiError ? err.message : 'Une erreur inattendue est survenue. Réessayez.')
     } finally {
       setLoading(false)
     }

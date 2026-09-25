@@ -5,8 +5,10 @@ import logoCse from '@/assets/logo_cse.png'
 import {
   LayoutDashboard, Lock, GraduationCap, DollarSign, QrCode, Bell,
   BarChart2, AlertTriangle, Wallet, Users2, UserSquare2, Calendar,
-  CreditCard, FolderOpen, ScrollText, Tag, Settings, LogOut, ChevronLeft
+  CreditCard, FolderOpen, ScrollText, Tag, Settings, LogOut, ChevronLeft, KeyRound
 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { ChangePasswordForm } from '@/components/AccountTools'
 import type { TabId } from '@/types'
 
 const NAV_ITEMS: { id: TabId; icon: React.ReactNode; label: string }[] = [
@@ -36,6 +38,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const { role, userLabel, activeTab, setActiveTab, logout, hasTab, computeAlerts, settings } = useAppStore()
+  const [pwdOpen, setPwdOpen] = React.useState(false)
   const alerts     = computeAlerts()
   const alertCount = alerts.length
   const roleDef    = role ? ROLES[role] : null
@@ -129,6 +132,19 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </div>
           </div>
         )}
+
+        {/* Changer son mot de passe */}
+        <button
+          onClick={() => setPwdOpen(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all duration-150"
+          title={collapsed ? 'Mot de passe' : undefined}
+        >
+          <KeyRound className="h-4 w-4 flex-shrink-0" />
+          {!collapsed && <span>Mot de passe</span>}
+        </button>
+        <Modal open={pwdOpen} onClose={() => setPwdOpen(false)} title="Changer mon mot de passe">
+          <ChangePasswordForm onDone={() => setPwdOpen(false)} />
+        </Modal>
 
         {/* Bouton déconnexion */}
         <button
