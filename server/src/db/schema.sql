@@ -1,17 +1,17 @@
 -- ============================================================
--- CSE DIVO — Gestion Financière Scolaire
--- Schéma MySQL (remplace la version Supabase/PostgreSQL)
+-- CSE DIVO Ã¢â‚¬â€ Gestion FinanciÃƒÂ¨re Scolaire
+-- SchÃƒÂ©ma MySQL (remplace la version Supabase/PostgreSQL)
 -- ============================================================
 -- Applique via `npm run migrate` (server/src/db/migrate.js).
--- Toutes les clés primaires sont des UUID (CHAR(36)) générés côté
+-- Toutes les clÃƒÂ©s primaires sont des UUID (CHAR(36)) gÃƒÂ©nÃƒÂ©rÃƒÂ©s cÃƒÂ´tÃƒÂ©
 -- application (Node `uuid`), pour rester portable entre MySQL
--- 5.7/8.0 et éviter toute divergence de fonction UUID() selon la
+-- 5.7/8.0 et ÃƒÂ©viter toute divergence de fonction UUID() selon la
 -- version du serveur.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ---- USERS (comptes réels — un par profil/rôle) ----
+-- ---- USERS (comptes rÃƒÂ©els Ã¢â‚¬â€ un par profil/rÃƒÂ´le) ----
 CREATE TABLE IF NOT EXISTS users (
   id            CHAR(36) PRIMARY KEY,
   role          VARCHAR(20) NOT NULL UNIQUE,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS settings (
   id                     VARCHAR(10) PRIMARY KEY DEFAULT 'main',
   school_name            VARCHAR(200) NOT NULL DEFAULT 'COURS SECONDAIRE ELITES DIVO',
   sigle                  VARCHAR(40) NOT NULL DEFAULT 'CSE Divo',
-  ville                  VARCHAR(120) NOT NULL DEFAULT 'Divo, Côte d''Ivoire',
+  ville                  VARCHAR(120) NOT NULL DEFAULT 'Divo, CÃƒÂ´te d''Ivoire',
   telephone              VARCHAR(30),
   email                  VARCHAR(150),
   annee_scolaire         VARCHAR(20) NOT NULL DEFAULT '2026-2027',
@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS settings (
   created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO settings (id) VALUES ('main');
+INSERT IGNORE INTO settings (id, pins)
+VALUES ('main', '{}');
 
 -- ---- CLASSES ----
 CREATE TABLE IF NOT EXISTS classes (
@@ -79,9 +80,9 @@ CREATE TABLE IF NOT EXISTS students (
   CONSTRAINT fk_students_classe FOREIGN KEY (classe_id) REFERENCES classes(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_students_classe_id ON students(classe_id);
-CREATE INDEX idx_students_statut ON students(statut);
-CREATE INDEX idx_students_token ON students(token);
+CREATE INDEX IF NOT EXISTS idx_students_classe_id ON students(classe_id);
+CREATE INDEX IF NOT EXISTS idx_students_statut ON students(statut);
+CREATE INDEX IF NOT EXISTS idx_students_token ON students(token);
 
 -- ---- PAYMENTS ----
 CREATE TABLE IF NOT EXISTS payments (
@@ -91,8 +92,8 @@ CREATE TABLE IF NOT EXISTS payments (
   student_matricule  VARCHAR(30) NOT NULL,
   classe_nom         VARCHAR(60),
   montant            INT NOT NULL,
-  mode               VARCHAR(30) NOT NULL DEFAULT 'Espèces',
-  motif              VARCHAR(80) NOT NULL DEFAULT 'Scolarité',
+  mode               VARCHAR(30) NOT NULL DEFAULT 'EspÃƒÂ¨ces',
+  motif              VARCHAR(80) NOT NULL DEFAULT 'ScolaritÃƒÂ©',
   recu_numero        VARCHAR(30) NOT NULL UNIQUE,
   caissiere          VARCHAR(80) NOT NULL,
   annule             TINYINT(1) NOT NULL DEFAULT 0,
@@ -103,8 +104,8 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT fk_payments_student FOREIGN KEY (student_id) REFERENCES students(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_payments_student_id ON payments(student_id);
-CREATE INDEX idx_payments_date ON payments(date DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_student_id ON payments(student_id);
+CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(date DESC);
 
 -- ---- REMINDERS ----
 CREATE TABLE IF NOT EXISTS reminders (
@@ -117,7 +118,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   CONSTRAINT fk_reminders_student FOREIGN KEY (student_id) REFERENCES students(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_reminders_student_id ON reminders(student_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_student_id ON reminders(student_id);
 
 -- ---- EXPENSES ----
 CREATE TABLE IF NOT EXISTS expenses (
@@ -126,7 +127,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   categorie     VARCHAR(80) NOT NULL,
   beneficiaire  VARCHAR(150),
   montant       INT NOT NULL,
-  mode          VARCHAR(30) NOT NULL DEFAULT 'Espèces',
+  mode          VARCHAR(30) NOT NULL DEFAULT 'EspÃƒÂ¨ces',
   statut        VARCHAR(12) NOT NULL DEFAULT 'EN_ATTENTE',
   description   TEXT,
   saisi_par     VARCHAR(80),
@@ -137,8 +138,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   CONSTRAINT chk_expenses_statut CHECK (statut IN ('EN_ATTENTE','VALIDEE','PAYEE','ANNULEE'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_expenses_statut ON expenses(statut);
-CREATE INDEX idx_expenses_date ON expenses(date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_statut ON expenses(statut);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
 
 -- ---- CASH CLOSURES ----
 CREATE TABLE IF NOT EXISTS cash_closures (
@@ -155,7 +156,7 @@ CREATE TABLE IF NOT EXISTS cash_closures (
   created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_cash_closures_date ON cash_closures(date DESC);
+CREATE INDEX IF NOT EXISTS idx_cash_closures_date ON cash_closures(date DESC);
 
 -- ---- TEACHERS (Vacataires) ----
 CREATE TABLE IF NOT EXISTS teachers (
@@ -190,8 +191,8 @@ CREATE TABLE IF NOT EXISTS teacher_hours (
   CONSTRAINT fk_teacher_hours_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_teacher_hours_teacher_id ON teacher_hours(teacher_id);
-CREATE INDEX idx_teacher_hours_mois ON teacher_hours(mois DESC);
+CREATE INDEX IF NOT EXISTS idx_teacher_hours_teacher_id ON teacher_hours(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_hours_mois ON teacher_hours(mois DESC);
 
 -- ---- STAFF (Personnel permanent) ----
 CREATE TABLE IF NOT EXISTS staff (
@@ -226,8 +227,8 @@ CREATE TABLE IF NOT EXISTS staff_payments (
   CONSTRAINT uq_staff_payments_staff_mois UNIQUE (staff_id, mois)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_staff_payments_staff_id ON staff_payments(staff_id);
-CREATE INDEX idx_staff_payments_mois ON staff_payments(mois DESC);
+CREATE INDEX IF NOT EXISTS idx_staff_payments_staff_id ON staff_payments(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_payments_mois ON staff_payments(mois DESC);
 
 -- ---- DEBTS ----
 CREATE TABLE IF NOT EXISTS debts (
@@ -268,6 +269,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details    TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_audit_logs_date ON audit_logs(date DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_date ON audit_logs(date DESC);
 
 SET FOREIGN_KEY_CHECKS = 1;
+
