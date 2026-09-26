@@ -494,6 +494,7 @@ function applyStudentFields(db: Db, s: Partial<Student>, body: Body, isNew: bool
     }
   }
   if (body.actif !== undefined) s.actif = !!body.actif
+  if (body.photo !== undefined) s.photo = optStr(body.photo)
   const frais = s.classe_id ? db.classes.find(c => c.id === s.classe_id)?.frais ?? 0 : 0
   s.total_du = frais + (s.frais_additionnels ?? 0)
   s.statut = statutOf(s.total_du, s.total_paye ?? 0)

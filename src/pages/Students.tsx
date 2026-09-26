@@ -4,7 +4,7 @@ import { api, ApiError } from '@/lib/apiClient'
 import { fmt, fmtDateShort } from '@/lib/utils'
 import {
   Search, Plus, Wallet, Pencil, Trash2, QrCode as QrIcon,
-  Printer, Download, FileSpreadsheet, FileText, X
+  Printer, Download, FileSpreadsheet, FileText, X, Camera, User
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -30,10 +30,53 @@ interface StudentFormState {
   parent_nom: string
   parent_tel: string
   frais_additionnels: string
+  photo: string
 }
 
 const EMPTY_FORM: StudentFormState = {
-  matricule: '', nom: '', prenoms: '', sexe: 'M', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0',
+  matricule: '', nom: '', prenoms: '', sexe: 'M', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0', photo: '',
+}
+
+// Fonction de redimensionnement/compression de la photo d'identité pour le stockage local léger
+function processPhotoFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const MAX_SIZE = 260
+        let w = img.width
+        let h = img.height
+
+        if (w > h) {
+          if (w > MAX_SIZE) {
+            h = Math.round((h * MAX_SIZE) / w)
+            w = MAX_SIZE
+          }
+        } else {
+          if (h > MAX_SIZE) {
+            w = Math.round((w * MAX_SIZE) / h)
+            h = MAX_SIZE
+          }
+        }
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(ev.target?.result as string)
+          return
+        }
+        ctx.drawImage(img, 0, 0, w, h)
+        // Compression en JPEG 82% pour garder une image légère (<25 Ko)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.onerror = reject
+      img.src = ev.target?.result as string
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 export default function Students() {
@@ -92,6 +135,7 @@ export default function Students() {
       parent_nom: s.parent_nom ?? '',
       parent_tel: s.parent_tel ?? '',
       frais_additionnels: String(s.frais_additionnels ?? 0),
+      photo: s.photo || '',
     })
     setStudentModal({ open: true, editing: s })
   }
@@ -118,6 +162,7 @@ export default function Students() {
         parent_nom: form.parent_nom || null,
         parent_tel: form.parent_tel || null,
         frais_additionnels: Number(form.frais_additionnels) || 0,
+        photo: form.photo || null,
       }
       if (studentModal.editing) {
         await api.put(`/api/students/${studentModal.editing.id}`, payload)
@@ -322,7 +367,7 @@ export default function Students() {
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Matricule</th>
-              <th className="px-4 py-3 text-left font-medium">Nom & Prénoms</th>
+              <th className="px-4 py-3 text-left font-medium">Élève</th>
               <th className="px-4 py-3 text-left font-medium">Classe</th>
               <th className="px-4 py-3 text-right font-medium">Dû</th>
               <th className="px-4 py-3 text-right font-medium">Payé</th>
@@ -347,15 +392,31 @@ export default function Students() {
                   {s.matricule}
                 </td>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
-                  <div>
-                    <span className="font-semibold">{s.nom}</span> {s.prenoms}
-                    <span className="ml-2 text-xs text-gray-400 font-normal">({s.sexe})</span>
+                  <div className="flex items-center gap-3">
+                    {/* Photo d'identité miniature ou Initiales */}
+                    {s.photo ? (
+                      <img
+                        src={s.photo}
+                        alt={`${s.nom} ${s.prenoms}`}
+                        className="w-10 h-10 rounded-xl object-cover border border-gray-200 dark:border-gray-700 shadow-sm shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs shrink-0">
+                        {s.nom.charAt(0)}{s.prenoms.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <div>
+                        <span className="font-semibold">{s.nom}</span> {s.prenoms}
+                        <span className="ml-2 text-xs text-gray-400 font-normal">({s.sexe})</span>
+                      </div>
+                      {s.parent_tel && (
+                        <p className="text-xs text-gray-400">
+                          {s.parent_nom ? `${s.parent_nom} — ` : ''}{s.parent_tel}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {s.parent_tel && (
-                    <p className="text-xs text-gray-400">
-                      {s.parent_nom ? `${s.parent_nom} — ` : ''}{s.parent_tel}
-                    </p>
-                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">
                   {s.classe_nom ? (
@@ -439,6 +500,55 @@ export default function Students() {
         maxWidth="lg"
       >
         <form onSubmit={handleSubmitStudent} className="space-y-4">
+          {/* Section Photo d'identité */}
+          <div className="flex items-center gap-4 p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 shrink-0">
+              {form.photo ? (
+                <img src={form.photo} alt="Identité" className="w-full h-full object-cover" />
+              ) : (
+                <User className="h-8 w-8 text-gray-400" />
+              )}
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200">
+                Photo d'identité de l'élève
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 dark:bg-primary-950/60 dark:text-primary-300 rounded-lg transition-colors border border-primary-200 dark:border-primary-800">
+                  <Camera className="h-3.5 w-3.5" />
+                  <span>{form.photo ? 'Changer la photo' : 'Importer une photo'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        try {
+                          const base64 = await processPhotoFile(file)
+                          setForm(f => ({ ...f, photo: base64 }))
+                          toast.success('Photo chargée avec succès.')
+                        } catch {
+                          toast.error('Erreur lors du traitement de l’image.')
+                        }
+                      }
+                    }}
+                  />
+                </label>
+                {form.photo && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, photo: '' }))}
+                    className="px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                  >
+                    Supprimer la photo
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400">Format JPEG ou PNG (recadré et optimisé automatiquement)</p>
+            </div>
+          </div>
+
           <Input
             label="Matricule *"
             value={form.matricule}
@@ -533,12 +643,21 @@ export default function Students() {
       <Modal open={!!payModal} onClose={() => setPayModal(null)} title="Encaisser un paiement" maxWidth="sm">
         {payModal && (
           <form onSubmit={handleSubmitPayment} className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-sm">
-              <p className="font-semibold text-gray-800 dark:text-white">{payModal.nom} {payModal.prenoms}</p>
-              <p className="text-xs text-gray-500">{payModal.matricule} — {payModal.classe_nom ?? 'Sans classe'}</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Dû : <strong>{fmt(payModal.total_du)}</strong> · Payé : <strong className="text-green-600">{fmt(payModal.total_paye)}</strong> · Reste : <strong className="text-red-500">{fmt(payModal.total_du - payModal.total_paye)}</strong>
-              </p>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-sm flex items-center gap-3">
+              {payModal.photo ? (
+                <img src={payModal.photo} alt={payModal.nom} className="w-12 h-12 rounded-xl object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-sm shrink-0">
+                  {payModal.nom.charAt(0)}{payModal.prenoms.charAt(0)}
+                </div>
+              )}
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800 dark:text-white">{payModal.nom} {payModal.prenoms}</p>
+                <p className="text-xs text-gray-500">{payModal.matricule} — {payModal.classe_nom ?? 'Sans classe'}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Dû : <strong>{fmt(payModal.total_du)}</strong> · Payé : <strong className="text-green-600">{fmt(payModal.total_paye)}</strong> · Reste : <strong className="text-red-500">{fmt(payModal.total_du - payModal.total_paye)}</strong>
+                </p>
+              </div>
             </div>
             <Input label="Montant (FCFA)" type="number" min={1} value={payAmount} onChange={e => setPayAmount(e.target.value)} required autoFocus />
             <Select

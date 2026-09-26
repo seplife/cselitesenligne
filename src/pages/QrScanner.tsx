@@ -224,9 +224,17 @@ export default function QrScanner() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-md border border-emerald-200 dark:border-emerald-800 space-y-5 animate-in fade-in duration-200">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 rounded-2xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 flex items-center justify-center text-primary-700 dark:text-primary-300 font-extrabold text-xl">
-                {foundStudent.nom.charAt(0)}{foundStudent.prenoms.charAt(0)}
-              </div>
+              {foundStudent.photo ? (
+                <img
+                  src={foundStudent.photo}
+                  alt={`${foundStudent.nom} ${foundStudent.prenoms}`}
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 flex items-center justify-center text-primary-700 dark:text-primary-300 font-extrabold text-xl shrink-0">
+                  {foundStudent.nom.charAt(0)}{foundStudent.prenoms.charAt(0)}
+                </div>
+              )}
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs font-bold text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/50 px-2 py-0.5 rounded-md">

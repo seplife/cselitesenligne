@@ -132,6 +132,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
     const matricule = isStudent ? student?.matricule : (staff?.matricule || 'PER')
     const nomComplet = `${entity.nom} ${entity.prenoms}`
     const sousTitre = isStudent ? `Classe : ${student?.classe_nom || 'Non affecté'}` : `Poste : ${staff?.poste || 'Personnel'}`
+    const photoUrl = isStudent ? student?.photo : undefined
     const statutBadge = isStudent
       ? (student?.statut === 'SOLDE' ? 'SOLDÉ' : student?.statut === 'CREDIT' ? 'CRÉDIT' : 'NON SOLDÉ')
       : (staff?.actif ? 'ACTIF' : 'INACTIF')
@@ -147,21 +148,23 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
   <style>
     @page { size: 86mm 54mm landscape; margin: 0; }
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #eee; }
-    .badge-card { width: 85mm; height: 53mm; background: #ffffff; border-radius: 6mm; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #d1e7dd; padding: 4mm 5mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
-    .badge-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #0f5132; padding-bottom: 2mm; }
+    .badge-card { width: 85mm; height: 53mm; background: #ffffff; border-radius: 6mm; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1.5px solid #0f5132; padding: 3.5mm 4mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+    .badge-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #0f5132; padding-bottom: 1.5mm; }
     .school-title { font-size: 11px; font-weight: 800; color: #0f5132; text-transform: uppercase; letter-spacing: 0.5px; }
     .school-sigle { font-size: 9px; font-weight: bold; color: #666; }
-    .badge-body { display: flex; align-items: center; gap: 3.5mm; flex: 1; padding: 2mm 0; }
-    .qr-img { width: 24mm; height: 24mm; border: 1px solid #0f5132; border-radius: 3mm; padding: 1mm; background: #fff; }
-    .info-col { flex: 1; }
-    .name { font-size: 12px; font-weight: bold; color: #111; margin-bottom: 1mm; line-height: 1.2; }
-    .mat { font-size: 10px; font-family: monospace; font-weight: bold; color: #0f5132; background: #e8f5e9; padding: 1px 4px; border-radius: 2px; display: inline-block; margin-bottom: 1mm; }
-    .meta { font-size: 9px; color: #444; margin-bottom: 0.5mm; }
-    .badge-status { display: inline-block; font-size: 8px; font-weight: bold; padding: 1px 5px; border-radius: 2mm; background: #0f5132; color: #fff; margin-top: 1mm; }
-    .badge-footer { display: flex; justify-content: space-between; align-items: center; font-size: 7.5px; color: #777; border-top: 1px solid #eee; padding-top: 1.5mm; }
+    .badge-body { display: flex; align-items: center; gap: 3mm; flex: 1; padding: 1.5mm 0; }
+    .photo-img { width: 20mm; height: 24mm; object-fit: cover; border-radius: 2.5mm; border: 1px solid #0f5132; background: #f0f7f2; }
+    .photo-placeholder { width: 20mm; height: 24mm; border-radius: 2.5mm; border: 1px dashed #0f5132; background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #0f5132; }
+    .qr-img { width: 22mm; height: 22mm; border: 1px solid #0f5132; border-radius: 2.5mm; padding: 0.5mm; background: #fff; }
+    .info-col { flex: 1; min-width: 0; }
+    .name { font-size: 11.5px; font-weight: bold; color: #111; margin-bottom: 0.5mm; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mat { font-size: 9.5px; font-family: monospace; font-weight: bold; color: #0f5132; background: #e8f5e9; padding: 1px 4px; border-radius: 2px; display: inline-block; margin-bottom: 0.5mm; }
+    .meta { font-size: 8.5px; color: #444; margin-bottom: 0.5mm; }
+    .badge-status { display: inline-block; font-size: 7.5px; font-weight: bold; padding: 1px 4px; border-radius: 2mm; background: #0f5132; color: #fff; margin-top: 0.5mm; }
+    .badge-footer { display: flex; justify-content: space-between; align-items: center; font-size: 7px; color: #777; border-top: 1px solid #eee; padding-top: 1mm; }
     @media print {
       body { background: transparent; }
-      .badge-card { box-shadow: none; border: 1px solid #999; }
+      .badge-card { box-shadow: none; border: 1px solid #0f5132; }
     }
   </style>
 </head>
@@ -172,7 +175,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
       <div class="school-sigle">${sigle} • ${annee}</div>
     </div>
     <div class="badge-body">
-      <img class="qr-img" src="${qrDataUrl}" alt="QR Code" />
+      ${photoUrl ? `<img class="photo-img" src="${photoUrl}" alt="Photo" />` : `<div class="photo-placeholder">${entity.nom.charAt(0)}${entity.prenoms.charAt(0)}</div>`}
       <div class="info-col">
         <div class="mat">${matricule}</div>
         <div class="name">${nomComplet}</div>
@@ -181,10 +184,11 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
         ${!isStudent && staff?.telephone ? `<div class="meta">Tél: ${staff.telephone}</div>` : ''}
         <div><span class="badge-status">${statutBadge}</span></div>
       </div>
+      <img class="qr-img" src="${qrDataUrl}" alt="QR Code" />
     </div>
     <div class="badge-footer">
       <span>CARTE OFFICIELLE D'IDENTITÉ</span>
-      <span>Scannez pour vérifier</span>
+      <span>Scannez pour vérifier l'authenticité</span>
     </div>
   </div>
   <script>
@@ -199,7 +203,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
     <Modal
       open={open}
       onClose={onClose}
-      title={isStudent ? "Badge & Code QR de l'Élève" : "Badge & Code QR du Personnel"}
+      title={isStudent ? "Badge Scolaire & Code QR" : "Badge Professionnel & Code QR"}
       maxWidth="md"
     >
       <div className="space-y-6">
@@ -230,18 +234,22 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
             </div>
           </div>
 
-          {/* Corps du badge */}
+          {/* Corps du badge avec Photo d'identité et Code QR */}
           <div className="flex flex-col sm:flex-row items-center gap-5">
-            {/* Image du QR Code généré */}
-            <div className="bg-white p-2.5 rounded-2xl shadow-md border-2 border-primary-400 shrink-0">
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt="QR Code" className="w-36 h-36 rounded-lg object-contain" />
+            {/* Photo d'identité de l'élève */}
+            <div className="shrink-0">
+              {isStudent && student?.photo ? (
+                <img
+                  src={student.photo}
+                  alt={`${student.nom} ${student.prenoms}`}
+                  className="w-28 h-32 rounded-2xl object-cover border-2 border-primary-300 shadow-lg bg-white"
+                />
               ) : (
-                <div className="w-36 h-36 flex items-center justify-center text-gray-400">
-                  <QrIcon className="h-8 w-8 animate-pulse text-primary-700" />
+                <div className="w-28 h-32 rounded-2xl bg-white/10 border-2 border-dashed border-white/30 flex flex-col items-center justify-center text-primary-200 shadow-inner">
+                  <User className="h-10 w-10 text-primary-300 mb-1" />
+                  <span className="text-[10px] uppercase font-semibold">Sans photo</span>
                 </div>
               )}
-              <p className="text-[10px] text-center text-gray-500 font-mono mt-1">Scannez-moi</p>
             </div>
 
             {/* Informations détaillées */}
@@ -282,7 +290,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
                         ? 'bg-blue-300 text-blue-950'
                         : 'bg-amber-300 text-amber-950'
                     }`}>
-                      {student?.statut === 'SOLDE' ? 'SOLDE' : student?.statut === 'CREDIT' ? 'CRÉDIT' : 'NON SOLDÉ'}
+                      {student?.statut === 'SOLDE' ? 'SOLDÉ' : student?.statut === 'CREDIT' ? 'CRÉDIT' : 'NON SOLDÉ'}
                     </span>
                     <span className="text-xs text-primary-200">
                       Reste : <strong className="text-white">{fmt((student?.total_du ?? 0) - (student?.total_paye ?? 0))}</strong>
@@ -317,6 +325,18 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Code QR généré */}
+            <div className="bg-white p-2 rounded-2xl shadow-md border-2 border-primary-400 shrink-0">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Code" className="w-28 h-28 rounded-lg object-contain" />
+              ) : (
+                <div className="w-28 h-28 flex items-center justify-center text-gray-400">
+                  <QrIcon className="h-8 w-8 animate-pulse text-primary-700" />
+                </div>
+              )}
+              <p className="text-[9px] text-center text-gray-500 font-mono mt-0.5">Scannez-moi</p>
             </div>
           </div>
 
