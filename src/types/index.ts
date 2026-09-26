@@ -173,6 +173,7 @@ export interface TeacherHour {
 
 export interface Staff {
   id: string;
+  matricule?: string;
   nom: string;
   prenoms: string;
   poste?: string;

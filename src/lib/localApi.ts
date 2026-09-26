@@ -10,7 +10,7 @@
 // Les mots de passe sont hachés (PBKDF2-SHA256 + sel) avant d'être stockés.
 // ─────────────────────────────────────────────────────────────────────────────
 import type {
-  Settings, Class, Student, Payment, Expense, CashClosure, AuditLog, RoleKey,
+  Settings, Class, Student, Payment, Expense, CashClosure, AuditLog, RoleKey, Staff,
 } from '@/types'
 
 const DB_KEY = 'cse_divo_db_v1'
@@ -48,7 +48,7 @@ interface Db {
   cash_closures: CashClosure[]
   teachers: unknown[]
   teacher_hours: unknown[]
-  staff: unknown[]
+  staff: Staff[]
   staff_payments: unknown[]
   debts: unknown[]
   documents: unknown[]
@@ -198,7 +198,16 @@ function readDb(): Db | null {
     const raw = localStorage.getItem(DB_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Db
-    return { ...emptyDb(), ...parsed, settings: { ...defaultSettings(), ...parsed.settings } }
+    const db: Db = { ...emptyDb(), ...parsed, settings: { ...defaultSettings(), ...parsed.settings } }
+    // Assurer que chaque membre du personnel a un matricule
+    if (Array.isArray(db.staff)) {
+      db.staff.forEach((s, idx) => {
+        if (!s.matricule) {
+          s.matricule = `PER-${String(idx + 1).padStart(3, '0')}`
+        }
+      })
+    }
+    return db
   } catch {
     return null
   }
@@ -536,15 +545,27 @@ route('PUT', '/api/students/:id', ({ db, body, params, token }) => {
   return s
 })
 
-route('DELETE', '/api/students/:id', ({ db, params, token }) => {
+route('DELETE', '/api/students/:id', ({ db, params, body, token }) => {
   const auth = requireAuth(db, token)
   requirePerm(auth, 'editStudents')
-  const s = db.students.find(x => x.id === params[0])
-  if (!s) throw new LocalApiError('Élève introuvable.', 404)
-  s.actif = false
-  audit(db, auth.user.role, 'DESACTIVATION', 'Élève', `${s.matricule} — ${s.nom} ${s.prenoms}`)
-  emitChange('students')
-  return { ok: true }
+  const idx = db.students.findIndex(x => x.id === params[0])
+  if (idx === -1) throw new LocalApiError('Élève introuvable.', 404)
+  const s = db.students[idx]
+  const hasPayments = db.payments.some(p => p.student_id === s.id)
+  const force = !!(body && (body as Record<string, unknown>).force)
+
+  if (force || !hasPayments) {
+    db.students.splice(idx, 1)
+    audit(db, auth.user.role, 'SUPPRESSION', 'Élève', `${s.matricule} — ${s.nom} ${s.prenoms}`, 'Suppression définitive')
+    emitChange('students')
+    return { ok: true, deleted: true, message: 'Élève supprimé définitivement.' }
+  } else {
+    s.actif = false
+    s.updated_at = nowIso()
+    audit(db, auth.user.role, 'DESACTIVATION', 'Élève', `${s.matricule} — ${s.nom} ${s.prenoms}`, 'Désactivé car des versements sont associés')
+    emitChange('students')
+    return { ok: true, deleted: false, message: 'Élève désactivé (des versements sont associés).' }
+  }
 })
 
 // Paiements
@@ -694,7 +715,68 @@ route('GET', '/api/audit_logs', ({ db, token }) => {
   return db.audit_logs.slice(0, 1000)
 })
 
-// Tables en lecture seule (vacataires, personnel, dettes, documents…)
+// Personnel (CRUD)
+route('POST', '/api/staff', ({ db, body, token }) => {
+  const auth = requireAuth(db, token)
+  requirePerm(auth, 'managePersonnel')
+  const nom = required(body.nom, 'Le nom').toUpperCase()
+  const prenoms = required(body.prenoms, 'Les prénoms')
+  let matricule = optStr(body.matricule)?.toUpperCase()
+  if (!matricule) {
+    const count = db.staff.length + 1
+    matricule = `PER-${String(count).padStart(3, '0')}`
+  }
+  const s: Staff = {
+    id: uuid(),
+    matricule,
+    nom,
+    prenoms,
+    poste: optStr(body.poste),
+    salaire_base: body.salaire_base !== undefined ? int(body.salaire_base, 'Le salaire de base', { min: 0 }) : 0,
+    telephone: optStr(body.telephone),
+    rib: optStr(body.rib),
+    date_embauche: optStr(body.date_embauche) || todayStr(),
+    actif: body.actif !== undefined ? !!body.actif : true,
+    created_at: nowIso(),
+  }
+  db.staff.push(s)
+  audit(db, auth.user.role, 'CREATION', 'Personnel', `${s.matricule ?? ''} — ${s.nom} ${s.prenoms}`.trim())
+  emitChange('staff')
+  return s
+})
+
+route('PUT', '/api/staff/:id', ({ db, body, params, token }) => {
+  const auth = requireAuth(db, token)
+  requirePerm(auth, 'managePersonnel')
+  const s = db.staff.find(x => x.id === params[0])
+  if (!s) throw new LocalApiError('Personnel introuvable.', 404)
+  if (body.nom !== undefined) s.nom = required(body.nom, 'Le nom').toUpperCase()
+  if (body.prenoms !== undefined) s.prenoms = required(body.prenoms, 'Les prénoms')
+  if (body.matricule !== undefined) s.matricule = optStr(body.matricule)?.toUpperCase()
+  if (body.poste !== undefined) s.poste = optStr(body.poste)
+  if (body.salaire_base !== undefined) s.salaire_base = int(body.salaire_base, 'Le salaire de base', { min: 0 })
+  if (body.telephone !== undefined) s.telephone = optStr(body.telephone)
+  if (body.rib !== undefined) s.rib = optStr(body.rib)
+  if (body.date_embauche !== undefined) s.date_embauche = optStr(body.date_embauche)
+  if (body.actif !== undefined) s.actif = !!body.actif
+  audit(db, auth.user.role, 'MODIFICATION', 'Personnel', `${s.matricule ?? ''} — ${s.nom} ${s.prenoms}`.trim())
+  emitChange('staff')
+  return s
+})
+
+route('DELETE', '/api/staff/:id', ({ db, params, token }) => {
+  const auth = requireAuth(db, token)
+  requirePerm(auth, 'managePersonnel')
+  const idx = db.staff.findIndex(x => x.id === params[0])
+  if (idx === -1) throw new LocalApiError('Personnel introuvable.', 404)
+  const s = db.staff[idx]
+  db.staff.splice(idx, 1)
+  audit(db, auth.user.role, 'SUPPRESSION', 'Personnel', `${s.matricule ?? ''} — ${s.nom} ${s.prenoms}`.trim())
+  emitChange('staff')
+  return { ok: true }
+})
+
+// Tables en lecture seule (vacataires, dettes, documents…)
 for (const t of LIST_TABLES) {
   route('GET', `/api/${t}`, ({ db, token }) => { requireAuth(db, token); return db[t] })
 }
