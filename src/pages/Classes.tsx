@@ -2,15 +2,16 @@ import React, { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { api, ApiError } from '@/lib/apiClient'
 import { fmt } from '@/lib/utils'
-import { Plus, Pencil } from 'lucide-react'
+import { Plus, Pencil, Printer, FileSpreadsheet, FileText, Users } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/FormFields'
+import { exportClassStudentsXLSX, exportClassStudentsPDF, printClassStudents } from '@/lib/exports'
 import toast from 'react-hot-toast'
 import type { Class } from '@/types'
 
 export default function Classes() {
-  const { classes, students, hasPerm, loadAll } = useAppStore()
+  const { classes, students, settings, hasPerm, loadAll } = useAppStore()
   const activeClasses = classes.filter(c => c.actif)
 
   const [modal, setModal] = useState<{ open: boolean; editing: Class | null }>({ open: false, editing: null })
@@ -51,10 +52,44 @@ export default function Classes() {
     }
   }
 
+  function handlePrintClass(classeNom: string, classId: string) {
+    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    if (eleves.length === 0) {
+      toast.error(`Aucun élève inscrit en ${classeNom}.`)
+      return
+    }
+    printClassStudents(classeNom, eleves, settings || undefined)
+  }
+
+  function handleExportClassXLSX(classeNom: string, classId: string) {
+    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    if (eleves.length === 0) {
+      toast.error(`Aucun élève inscrit en ${classeNom}.`)
+      return
+    }
+    exportClassStudentsXLSX(classeNom, eleves, settings?.annee_scolaire)
+    toast.success(`Liste ${classeNom} exportée en Excel.`)
+  }
+
+  function handleExportClassPDF(classeNom: string, classId: string) {
+    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    if (eleves.length === 0) {
+      toast.error(`Aucun élève inscrit en ${classeNom}.`)
+      return
+    }
+    exportClassStudentsPDF(classeNom, eleves, settings || undefined)
+    toast.success(`Liste ${classeNom} exportée en PDF.`)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Classes ({activeClasses.length})</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Classes ({activeClasses.length})</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Gérez les classes, imprimez ou téléchargez les listes des élèves inscrits
+          </p>
+        </div>
         {hasPerm('editClasses') && (
           <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>Nouvelle classe</Button>
         )}
@@ -71,7 +106,7 @@ export default function Classes() {
           const taux = attendu > 0 ? Math.round((encaisse / attendu) * 100) : 0
 
           return (
-            <div key={c.id} className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 relative">
+            <div key={c.id} className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 relative flex flex-col justify-between">
               {hasPerm('editClasses') && (
                 <button
                   onClick={() => openEdit(c)}
@@ -81,34 +116,73 @@ export default function Classes() {
                   <Pencil className="h-4 w-4" />
                 </button>
               )}
-              <div className="flex items-start justify-between mb-3 pr-8">
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-lg">{c.nom}</h3>
-                  <p className="text-xs text-gray-400">{c.niveau}</p>
+
+              <div>
+                <div className="flex items-start justify-between mb-3 pr-8">
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">{c.nom}</h3>
+                    <p className="text-xs text-gray-400 font-medium">Niveau : {c.niveau}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-extrabold text-primary-600 dark:text-primary-400">{eleves.length}</span>
+                    <span className="text-[10px] text-gray-400 block -mt-1">élève(s)</span>
+                  </div>
                 </div>
-                <span className="text-2xl font-bold text-gray-200 dark:text-gray-700">{eleves.length}</span>
+
+                <dl className="grid grid-cols-2 gap-2 text-sm mb-4">
+                  <div>
+                    <dt className="text-xs text-gray-400">Frais de scolarité</dt>
+                    <dd className="font-semibold text-gray-700 dark:text-gray-200">{fmt(c.frais)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-400">Soldés</dt>
+                    <dd className="font-semibold text-green-600">{soldes}/{eleves.length}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-400">Encaissé</dt>
+                    <dd className="font-semibold text-gray-700 dark:text-gray-200">{fmt(encaisse)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-400">Taux recouvrement</dt>
+                    <dd className="font-semibold text-primary-600">{taux}%</dd>
+                  </div>
+                </dl>
+
+                <div className="mb-4">
+                  <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                    <div className="bg-primary-500 h-1.5 rounded-full transition-all" style={{ width: `${taux}%` }} />
+                  </div>
+                </div>
               </div>
-              <dl className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <dt className="text-xs text-gray-400">Frais de scolarité</dt>
-                  <dd className="font-semibold text-gray-700 dark:text-gray-200">{fmt(c.frais)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-400">Soldés</dt>
-                  <dd className="font-semibold text-green-600">{soldes}/{eleves.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-400">Encaissé</dt>
-                  <dd className="font-semibold text-gray-700 dark:text-gray-200">{fmt(encaisse)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-400">Taux</dt>
-                  <dd className="font-semibold text-primary-600">{taux}%</dd>
-                </div>
-              </dl>
-              <div className="mt-3">
-                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                  <div className="bg-primary-500 h-1.5 rounded-full transition-all" style={{ width: `${taux}%` }} />
+
+              {/* Barre d'action Téléchargement / Impression de la classe */}
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
+                <span className="text-gray-400 text-[11px] font-medium">Liste des inscrits :</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handlePrintClass(c.nom, c.id)}
+                    title={`Imprimer la liste officielle de ${c.nom}`}
+                    className="p-1.5 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center gap-1 font-medium text-xs"
+                  >
+                    <Printer className="h-3.5 w-3.5 text-primary-600" />
+                    <span>Imprimer</span>
+                  </button>
+                  <button
+                    onClick={() => handleExportClassXLSX(c.nom, c.id)}
+                    title={`Télécharger Excel de ${c.nom}`}
+                    className="p-1.5 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors flex items-center gap-1 font-medium text-xs"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    <span>Excel</span>
+                  </button>
+                  <button
+                    onClick={() => handleExportClassPDF(c.nom, c.id)}
+                    title={`Télécharger PDF de ${c.nom}`}
+                    className="p-1.5 rounded-lg text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center gap-1 font-medium text-xs"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>PDF</span>
+                  </button>
                 </div>
               </div>
             </div>

@@ -125,6 +125,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
   }
 
   function handlePrintBadge() {
+    if (!entity) return
     const school = settings?.school_name || 'CSE DIVO'
     const sigle = settings?.sigle || 'CSE'
     const annee = settings?.annee_scolaire || ''
