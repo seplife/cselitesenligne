@@ -88,24 +88,39 @@
 
   /* ─── Layout principal ──────────────────────────────── */
   .app-layout {
-    @apply flex min-h-screen bg-surface-50 dark:bg-surface-950;
+    @apply flex min-h-screen bg-surface-50 dark:bg-surface-950 w-full overflow-x-hidden relative;
   }
 
   .app-main {
-    @apply flex-1 flex flex-col min-w-0 transition-all duration-300;
+    @apply flex-1 flex flex-col min-w-0 w-full overflow-x-hidden transition-all duration-300;
   }
 
   /* ─── Sidebar ───────────────────────────────────────── */
   .sidebar {
-    @apply h-screen sticky top-0 flex flex-col overflow-hidden;
-    @apply transition-all duration-300 ease-in-out;
+    @apply h-screen fixed lg:sticky top-0 left-0 z-50 flex flex-col overflow-hidden;
+    @apply transition-transform duration-300 ease-in-out lg:transition-[width];
     background: linear-gradient(180deg, #8d1c1c 0%, #6b1515 65%, #3d0c0c 100%);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
-    width: var(--sidebar-width);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    width: min(var(--sidebar-width), 85vw);
+    max-width: 280px;
+    transform: translateX(-100%);
   }
 
-  .sidebar.collapsed {
-    width: var(--sidebar-collapsed);
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  @media (min-width: 1024px) {
+    .sidebar {
+      transform: none !important;
+      width: var(--sidebar-width);
+      max-width: none;
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .sidebar.collapsed {
+      width: var(--sidebar-collapsed);
+    }
   }
 
   .sidebar-logo {
@@ -187,7 +202,7 @@
 
   /* ─── Topbar ────────────────────────────────────────── */
   .topbar {
-    @apply sticky top-0 z-40 flex items-center justify-between px-6;
+    @apply sticky top-0 z-30 flex items-center justify-between px-3 sm:px-6;
     @apply bg-white/95 dark:bg-surface-900/95 backdrop-blur-md;
     @apply border-b border-surface-200 dark:border-surface-700;
     height: var(--topbar-height);
@@ -195,23 +210,23 @@
   }
 
   .topbar-school {
-    @apply hidden md:flex flex-col;
+    @apply flex flex-col min-w-0;
   }
 
   .topbar-school-name {
-    @apply text-sm font-bold text-surface-800 dark:text-surface-100 leading-tight;
+    @apply text-xs sm:text-sm font-bold text-surface-800 dark:text-surface-100 leading-tight truncate;
   }
 
   .topbar-school-year {
-    @apply text-xs text-surface-400 dark:text-surface-500;
+    @apply text-[10px] sm:text-xs text-surface-400 dark:text-surface-500 truncate;
   }
 
   .topbar-actions {
-    @apply flex items-center gap-2 ml-auto;
+    @apply flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0;
   }
 
   .topbar-user-chip {
-    @apply flex items-center gap-2 px-3 py-1.5 rounded-xl;
+    @apply flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl;
     @apply bg-surface-50 dark:bg-surface-800;
     @apply border border-surface-200 dark:border-surface-700;
     @apply text-sm;
@@ -226,7 +241,7 @@
 
   /* ─── Page wrapper ───────────────────────────────── */
   .page-content {
-    @apply flex-1 p-6 animate-fade-in;
+    @apply flex-1 p-3 sm:p-5 lg:p-6 animate-fade-in w-full max-w-full;
     max-width: 1600px;
   }
 
@@ -393,7 +408,8 @@
 
   /* ─── Tableaux ───────────────────────────────────── */
   .data-table {
-    @apply w-full border-collapse text-sm;
+    @apply w-full border-collapse text-sm min-w-[600px];
+    -webkit-overflow-scrolling: touch;
   }
 
   .data-table thead {
@@ -423,11 +439,17 @@
   .table-wrapper {
     @apply overflow-x-auto rounded-2xl border border-surface-200 dark:border-surface-700;
     @apply shadow-card;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .overflow-auto > table,
+  .overflow-x-auto > table {
+    -webkit-overflow-scrolling: touch;
   }
 
   /* ─── Modales ────────────────────────────────────── */
   .modal-overlay {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    @apply fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4;
     @apply bg-surface-950/60 backdrop-blur-sm;
     @apply animate-fade-in;
   }
@@ -435,29 +457,30 @@
   .modal-box {
     @apply relative w-full bg-white dark:bg-surface-800;
     @apply rounded-2xl shadow-card-lg border border-surface-200 dark:border-surface-700;
-    @apply max-h-[90vh] overflow-y-auto;
+    @apply max-h-[92vh] sm:max-h-[90vh] overflow-y-auto;
     @apply animate-slide-in-up;
+    -webkit-overflow-scrolling: touch;
   }
 
   .modal-header {
-    @apply flex items-center justify-between px-6 py-4;
+    @apply flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4;
     @apply border-b border-surface-100 dark:border-surface-700;
     @apply sticky top-0 bg-white dark:bg-surface-800 z-10 rounded-t-2xl;
   }
 
   .modal-title {
-    @apply text-lg font-bold text-surface-900 dark:text-white;
+    @apply text-base sm:text-lg font-bold text-surface-900 dark:text-white truncate;
   }
 
   .modal-close-btn {
     @apply p-1.5 rounded-xl text-surface-400 hover:text-surface-600 dark:hover:text-surface-300;
-    @apply hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors;
+    @apply hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors shrink-0;
   }
 
-  .modal-body { @apply p-6; }
+  .modal-body { @apply p-4 sm:p-6; }
 
   .modal-footer {
-    @apply flex items-center justify-end gap-3 px-6 py-4;
+    @apply flex flex-wrap items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4;
     @apply border-t border-surface-100 dark:border-surface-700;
     @apply bg-surface-50 dark:bg-surface-900/50 rounded-b-2xl;
   }

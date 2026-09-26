@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { api, ApiError } from '@/lib/apiClient'
-import { fmt, fmtDateShort } from '@/lib/utils'
+import { fmt, fmtDateShort, cn } from '@/lib/utils'
 import {
   Search, Plus, Wallet, Pencil, Trash2, QrCode as QrIcon,
-  Printer, Download, FileSpreadsheet, FileText, X, Camera, User
+  Printer, Download, FileSpreadsheet, FileText, X, Camera, User,
+  ArrowDownAZ, ArrowUpZA, ArrowUpDown
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -102,21 +103,48 @@ export default function Students() {
   const [payMotif, setPayMotif] = useState('Scolarité')
   const [paying, setPaying] = useState(false)
 
-  // Filtrage combiné et recherche insensible à la casse
-  const filtered = students.filter(s => {
-    if (!s.actif) return false
-    const q = search.trim().toLowerCase()
-    if (q) {
-      const matchNom = s.nom.toLowerCase().includes(q)
-      const matchPrenoms = s.prenoms.toLowerCase().includes(q)
-      const matchMatricule = s.matricule.toLowerCase().includes(q)
-      if (!matchNom && !matchPrenoms && !matchMatricule) return false
+  // État du tri alphabétique ('asc' = A-Z, 'desc' = Z-A, 'none' = ordre initial)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('asc')
+
+  const toggleSortOrder = () => {
+    setSortOrder(current => {
+      if (current === 'asc') return 'desc'
+      if (current === 'desc') return 'none'
+      return 'asc'
+    })
+  }
+
+  // Filtrage combiné et tri alphabétique (nom puis prénoms)
+  const filtered = React.useMemo(() => {
+    const list = students.filter(s => {
+      if (!s.actif) return false
+      const q = search.trim().toLowerCase()
+      if (q) {
+        const matchNom = s.nom.toLowerCase().includes(q)
+        const matchPrenoms = s.prenoms.toLowerCase().includes(q)
+        const matchMatricule = s.matricule.toLowerCase().includes(q)
+        if (!matchNom && !matchPrenoms && !matchMatricule) return false
+      }
+      if (filterStatut !== 'all' && s.statut !== filterStatut) return false
+      if (filterClasse !== 'all' && s.classe_id !== filterClasse) return false
+      if (filterType !== 'all' && (s.student_type || 'AFFECTE_ETAT') !== filterType) return false
+      return true
+    })
+
+    if (sortOrder === 'asc') {
+      return [...list].sort((a, b) => {
+        const n = a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' })
+        return n !== 0 ? n : a.prenoms.localeCompare(b.prenoms, 'fr', { sensitivity: 'base' })
+      })
     }
-    if (filterStatut !== 'all' && s.statut !== filterStatut) return false
-    if (filterClasse !== 'all' && s.classe_id !== filterClasse) return false
-    if (filterType !== 'all' && (s.student_type || 'AFFECTE_ETAT') !== filterType) return false
-    return true
-  })
+    if (sortOrder === 'desc') {
+      return [...list].sort((a, b) => {
+        const n = b.nom.localeCompare(a.nom, 'fr', { sensitivity: 'base' })
+        return n !== 0 ? n : b.prenoms.localeCompare(a.prenoms, 'fr', { sensitivity: 'base' })
+      })
+    }
+    return list
+  }, [students, search, filterStatut, filterClasse, filterType, sortOrder])
 
   // Nom de la classe actuellement sélectionnée pour les exports
   const selectedClasseNom = React.useMemo(() => {
@@ -391,9 +419,47 @@ export default function Students() {
             </select>
           </div>
 
-          {(search || filterClasse !== 'all' || filterStatut !== 'all' || filterType !== 'all') && (
+          {/* Bouton de tri alphabétique */}
+          <button
+            type="button"
+            onClick={toggleSortOrder}
+            title={`Ordre alphabétique des élèves (Actuel : ${
+              sortOrder === 'asc' ? 'A à Z' : sortOrder === 'desc' ? 'Z à A' : 'Ordre d\'enregistrement'
+            })`}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer select-none',
+              sortOrder !== 'none'
+                ? 'bg-primary-50 dark:bg-primary-950/40 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 shadow-sm'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}
+          >
+            {sortOrder === 'asc' ? (
+              <>
+                <ArrowDownAZ className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                <span>Nom : A → Z</span>
+              </>
+            ) : sortOrder === 'desc' ? (
+              <>
+                <ArrowUpZA className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                <span>Nom : Z → A</span>
+              </>
+            ) : (
+              <>
+                <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                <span>Nom : Initial</span>
+              </>
+            )}
+          </button>
+
+          {(search || filterClasse !== 'all' || filterStatut !== 'all' || filterType !== 'all' || sortOrder !== 'asc') && (
             <button
-              onClick={() => { setSearch(''); setFilterClasse('all'); setFilterStatut('all'); setFilterType('all') }}
+              onClick={() => {
+                setSearch('')
+                setFilterClasse('all')
+                setFilterStatut('all')
+                setFilterType('all')
+                setSortOrder('asc')
+              }}
               className="text-xs text-primary-600 hover:text-primary-700 font-medium px-2 py-1 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-950/40"
             >
               Réinitialiser les filtres
@@ -402,12 +468,27 @@ export default function Students() {
         </div>
 
         {/* Tableau des élèves */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-          <table className="min-w-full text-sm">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+          <table className="min-w-[780px] w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Matricule</th>
-                <th className="px-4 py-3 text-left font-medium">Élève</th>
+                <th
+                  onClick={toggleSortOrder}
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/60 select-none group transition-colors"
+                  title="Cliquer pour basculer le tri alphabétique (A-Z / Z-A / Initial)"
+                >
+                  <div className="inline-flex items-center gap-1.5">
+                    <span>Élève</span>
+                    {sortOrder === 'asc' ? (
+                      <ArrowDownAZ className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                    ) : sortOrder === 'desc' ? (
+                      <ArrowUpZA className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                    ) : (
+                      <ArrowUpDown className="h-3.5 w-3.5 text-gray-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-left font-medium">Statut Élève</th>
                 <th className="px-4 py-3 text-left font-medium">Classe</th>
                 <th className="px-4 py-3 text-right font-medium">Dû</th>

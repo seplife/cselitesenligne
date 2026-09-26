@@ -96,7 +96,7 @@ export default function TuitionManagement() {
       else if (selectedStatut === 'CREDIT') matchStatut = a.statut === 'CREDIT'
 
       return matchSearch && matchClass && matchType && matchStatut
-    })
+    }).sort((a, b) => a.student_nom.localeCompare(b.student_nom, 'fr', { sensitivity: 'base' }))
   }, [accounts, searchTerm, selectedClass, selectedType, selectedStatut])
 
   // Overdue accounts only
@@ -214,7 +214,7 @@ export default function TuitionManagement() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Card className="p-4 bg-white dark:bg-gray-800 border-l-4 border-l-blue-500">
           <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Total Attendu</p>
           <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">{fmt(stats.totalAttendu)} <span className="text-xs text-gray-500">F</span></p>
@@ -253,7 +253,7 @@ export default function TuitionManagement() {
       </div>
 
       {/* ── Onglets principaux ── */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 space-x-4">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 space-x-2 sm:space-x-4 overflow-x-auto no-scrollbar whitespace-nowrap">
         <button
           onClick={() => setActiveSubTab('accounts')}
           className={cn(
@@ -361,7 +361,7 @@ export default function TuitionManagement() {
           {/* Tableau des comptes financiers */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left text-sm min-w-[760px]">
                 <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase">
                   <tr>
                     <th className="py-3 px-4">Élève</th>
@@ -512,7 +512,8 @@ export default function TuitionManagement() {
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[760px]">
               <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 text-xs font-semibold uppercase">
                 <tr>
                   <th className="py-3 px-4">Élève & Matricule</th>
@@ -588,6 +589,7 @@ export default function TuitionManagement() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -820,50 +822,52 @@ export default function TuitionManagement() {
 
           {/* Tableau par classe */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-gray-200 font-bold text-gray-900">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 font-bold text-gray-900 dark:text-white">
               Performance de recouvrement par classe
             </div>
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
-                <tr>
-                  <th className="py-3 px-4">Classe</th>
-                  <th className="py-3 px-4 text-center">Effectif</th>
-                  <th className="py-3 px-4 text-right">Attendu</th>
-                  <th className="py-3 px-4 text-right">Encaissé</th>
-                  <th className="py-3 px-4 text-right">Restant</th>
-                  <th className="py-3 px-4 text-center">Soldés</th>
-                  <th className="py-3 px-4">Taux</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {classes.map(c => {
-                  const classAccs = accounts.filter(a => a.classe_nom === c.nom)
-                  const du = classAccs.reduce((s, a) => s + a.total_du, 0)
-                  const paye = classAccs.reduce((s, a) => s + a.total_paye, 0)
-                  const reste = classAccs.reduce((s, a) => s + a.reste, 0)
-                  const soldes = classAccs.filter(a => a.reste === 0).length
-                  const tx = du > 0 ? Math.round((paye / du) * 10000) / 100 : 100
-                  return (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 font-bold">{c.nom}</td>
-                      <td className="py-3 px-4 text-center">{classAccs.length}</td>
-                      <td className="py-3 px-4 text-right font-medium">{fmt(du)} F</td>
-                      <td className="py-3 px-4 text-right font-semibold text-emerald-600">{fmt(paye)} F</td>
-                      <td className="py-3 px-4 text-right font-bold text-rose-600">{fmt(reste)} F</td>
-                      <td className="py-3 px-4 text-center text-xs font-semibold">{soldes} / {classAccs.length}</td>
-                      <td className="py-3 px-4 min-w-[120px]">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-gray-200 h-2 rounded-full overflow-hidden">
-                            <div className="bg-red-600 h-full rounded-full" style={{ width: `${Math.min(100, tx)}%` }} />
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[650px]">
+                <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                  <tr>
+                    <th className="py-3 px-4">Classe</th>
+                    <th className="py-3 px-4 text-center">Effectif</th>
+                    <th className="py-3 px-4 text-right">Attendu</th>
+                    <th className="py-3 px-4 text-right">Encaissé</th>
+                    <th className="py-3 px-4 text-right">Restant</th>
+                    <th className="py-3 px-4 text-center">Soldés</th>
+                    <th className="py-3 px-4">Taux</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {classes.map(c => {
+                    const classAccs = accounts.filter(a => a.classe_nom === c.nom)
+                    const du = classAccs.reduce((s, a) => s + a.total_du, 0)
+                    const paye = classAccs.reduce((s, a) => s + a.total_paye, 0)
+                    const reste = classAccs.reduce((s, a) => s + a.reste, 0)
+                    const soldes = classAccs.filter(a => a.reste === 0).length
+                    const tx = du > 0 ? Math.round((paye / du) * 10000) / 100 : 100
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{c.nom}</td>
+                        <td className="py-3 px-4 text-center">{classAccs.length}</td>
+                        <td className="py-3 px-4 text-right font-medium">{fmt(du)} F</td>
+                        <td className="py-3 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmt(paye)} F</td>
+                        <td className="py-3 px-4 text-right font-bold text-rose-600 dark:text-rose-400">{fmt(reste)} F</td>
+                        <td className="py-3 px-4 text-center text-xs font-semibold">{soldes} / {classAccs.length}</td>
+                        <td className="py-3 px-4 min-w-[120px]">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                              <div className="bg-red-600 h-full rounded-full" style={{ width: `${Math.min(100, tx)}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{tx}%</span>
                           </div>
-                          <span className="text-xs font-bold">{tx}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

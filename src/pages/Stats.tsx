@@ -36,26 +36,26 @@ export default function Stats() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Statistiques</h1>
 
       {/* Global */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Élèves actifs', value: actifs.length.toString() },
           { label: 'Attendu total', value: fmt(globalAttend) },
           { label: 'Encaissé total', value: fmt(globalEnc) },
           { label: 'Taux recouvrement', value: `${globalTaux}%` },
         ].map(k => (
-          <div key={k.label} className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 text-center">
-            <p className="text-xs text-gray-500 mb-1">{k.label}</p>
-            <p className="text-xl font-bold text-gray-900 dark:text-white">{k.value}</p>
+          <div key={k.label} className="bg-white dark:bg-gray-900 rounded-2xl p-3 sm:p-4 shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+            <p className="text-xs text-gray-500 mb-1 truncate">{k.label}</p>
+            <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* By class */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 whitespace-nowrap">
           <h2 className="font-semibold text-gray-800 dark:text-white">Statistiques par classe</h2>
         </div>
-        <table className="min-w-full text-sm">
+        <table className="min-w-[620px] w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Classe</th>

@@ -128,11 +128,11 @@ export default function Caisse() {
       </div>
 
       {tab === 'depenses' && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-          <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 text-sm text-gray-500">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+          <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 text-sm text-gray-500 whitespace-nowrap">
             Total décaissé (Payées) : <span className="font-semibold text-gray-800 dark:text-white">{fmt(totDepenses)}</span>
           </div>
-          <table className="min-w-full text-sm">
+          <table className="min-w-[650px] w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">N°</th>
@@ -193,8 +193,8 @@ export default function Caisse() {
       )}
 
       {tab === 'clotures' && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-          <table className="min-w-full text-sm">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+          <table className="min-w-[650px] w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Date</th>

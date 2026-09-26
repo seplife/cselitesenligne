@@ -50,8 +50,8 @@ export default function Vacataires() {
             />
             <span className="text-sm text-gray-500">Total à payer : <strong className="text-gray-900 dark:text-white">{fmt(totalValide)}</strong></span>
           </div>
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-            <table className="min-w-full text-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+            <table className="min-w-[650px] w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Vacataire</th>
@@ -88,8 +88,8 @@ export default function Vacataires() {
       )}
 
       {tab === 'vacataires' && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-          <table className="min-w-full text-sm">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-x-auto">
+          <table className="min-w-[600px] w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Nom</th>

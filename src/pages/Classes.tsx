@@ -52,8 +52,14 @@ export default function Classes() {
     }
   }
 
+  function getClassStudents(classId: string) {
+    return students
+      .filter(s => s.actif && s.classe_id === classId)
+      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' }) || a.prenoms.localeCompare(b.prenoms, 'fr', { sensitivity: 'base' }))
+  }
+
   function handlePrintClass(classeNom: string, classId: string) {
-    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    const eleves = getClassStudents(classId)
     if (eleves.length === 0) {
       toast.error(`Aucun élève inscrit en ${classeNom}.`)
       return
@@ -62,7 +68,7 @@ export default function Classes() {
   }
 
   function handleExportClassXLSX(classeNom: string, classId: string) {
-    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    const eleves = getClassStudents(classId)
     if (eleves.length === 0) {
       toast.error(`Aucun élève inscrit en ${classeNom}.`)
       return
@@ -72,7 +78,7 @@ export default function Classes() {
   }
 
   function handleExportClassPDF(classeNom: string, classId: string) {
-    const eleves = students.filter(s => s.actif && s.classe_id === classId)
+    const eleves = getClassStudents(classId)
     if (eleves.length === 0) {
       toast.error(`Aucun élève inscrit en ${classeNom}.`)
       return
