@@ -12,12 +12,14 @@ import { Input, Select } from '@/components/ui/FormFields'
 import { QrBadgeModal } from '@/components/QrBadgeModal'
 import { exportClassStudentsXLSX, exportClassStudentsPDF, printClassStudents } from '@/lib/exports'
 import toast from 'react-hot-toast'
-import type { Student } from '@/types'
+import type { Student, StudentType } from '@/types'
 
 const STATUT_COLORS: Record<string, string> = {
   SOLDE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   CREDIT: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
   NON_SOLDE: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  PARTIEL: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  EN_RETARD: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
 }
 
 interface StudentFormState {
@@ -25,16 +27,18 @@ interface StudentFormState {
   nom: string
   prenoms: string
   sexe: 'M' | 'F'
+  student_type: StudentType
   date_naissance: string
   classe_id: string
   parent_nom: string
   parent_tel: string
   frais_additionnels: string
+  remise: string
   photo: string
 }
 
 const EMPTY_FORM: StudentFormState = {
-  matricule: '', nom: '', prenoms: '', sexe: 'M', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0', photo: '',
+  matricule: '', nom: '', prenoms: '', sexe: 'M', student_type: 'AFFECTE_ETAT', date_naissance: '', classe_id: '', parent_nom: '', parent_tel: '', frais_additionnels: '0', remise: '0', photo: '',
 }
 
 // Fonction de redimensionnement/compression de la photo d'identité pour le stockage local léger
@@ -84,6 +88,7 @@ export default function Students() {
   const [search, setSearch] = useState('')
   const [filterStatut, setFilterStatut] = useState<string>('all')
   const [filterClasse, setFilterClasse] = useState<string>('all')
+  const [filterType, setFilterType] = useState<string>('all')
 
   const [studentModal, setStudentModal] = useState<{ open: boolean; editing: Student | null }>({ open: false, editing: null })
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; student: Student | null; deleting: boolean }>({ open: false, student: null, deleting: false })
@@ -109,6 +114,7 @@ export default function Students() {
     }
     if (filterStatut !== 'all' && s.statut !== filterStatut) return false
     if (filterClasse !== 'all' && s.classe_id !== filterClasse) return false
+    if (filterType !== 'all' && (s.student_type || 'AFFECTE_ETAT') !== filterType) return false
     return true
   })
 
@@ -118,6 +124,9 @@ export default function Students() {
     const c = classes.find(x => x.id === filterClasse)
     return c ? c.nom : 'Classe'
   }, [filterClasse, classes])
+
+  const [payReference, setPayReference] = useState('')
+  const [allowCredit, setAllowCredit] = useState(false)
 
   function openCreate() {
     setForm(EMPTY_FORM)
@@ -130,11 +139,13 @@ export default function Students() {
       nom: s.nom,
       prenoms: s.prenoms,
       sexe: s.sexe,
+      student_type: s.student_type || 'AFFECTE_ETAT',
       date_naissance: s.date_naissance ?? '',
       classe_id: s.classe_id ?? '',
       parent_nom: s.parent_nom ?? '',
       parent_tel: s.parent_tel ?? '',
       frais_additionnels: String(s.frais_additionnels ?? 0),
+      remise: String(s.remise ?? 0),
       photo: s.photo || '',
     })
     setStudentModal({ open: true, editing: s })
@@ -157,11 +168,13 @@ export default function Students() {
         nom: form.nom.trim(),
         prenoms: form.prenoms.trim(),
         sexe: form.sexe,
+        student_type: form.student_type,
         date_naissance: form.date_naissance || null,
         classe_id: form.classe_id || null,
         parent_nom: form.parent_nom || null,
         parent_tel: form.parent_tel || null,
         frais_additionnels: Number(form.frais_additionnels) || 0,
+        remise: Number(form.remise) || 0,
         photo: form.photo || null,
       }
       if (studentModal.editing) {
@@ -202,6 +215,14 @@ export default function Students() {
       toast.error('Montant invalide.')
       return
     }
+
+    const electronicModes = ['ORANGE MONEY', 'MTN MONEY', 'MOOV MONEY', 'WAVE', 'VIREMENT BANCAIRE', 'CHÈQUE']
+    const isElectronic = electronicModes.some(m => m.toLowerCase() === payMode.toLowerCase())
+    if (isElectronic && !payReference.trim()) {
+      toast.error(`La référence ou numéro de transaction est obligatoire pour ${payMode}.`)
+      return
+    }
+
     setPaying(true)
     try {
       await api.post('/api/payments', {
@@ -209,10 +230,14 @@ export default function Students() {
         montant,
         mode: payMode,
         motif: payMotif,
+        reference: payReference.trim() || undefined,
+        allow_credit: allowCredit,
       })
       toast.success('Paiement enregistré.')
       setPayModal(null)
       setPayAmount('')
+      setPayReference('')
+      setAllowCredit(false)
       await loadAll()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Une erreur est survenue.')
@@ -336,89 +361,116 @@ export default function Students() {
           </select>
         </div>
 
-        {/* Filtre Statut financier */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Statut :</label>
-          <select
-            value={filterStatut}
-            onChange={e => setFilterStatut(e.target.value)}
-            className="text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">Tous statuts</option>
-            <option value="SOLDE">Soldé</option>
-            <option value="NON_SOLDE">Non soldé</option>
-            <option value="CREDIT">Crédit</option>
-          </select>
+          {/* Filtre Affectation */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Affectation :</label>
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+              className="text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="all">Tous statuts</option>
+              <option value="AFFECTE_ETAT">Affecté de l'État</option>
+              <option value="NON_AFFECTE">Non-Affecté</option>
+            </select>
+          </div>
+
+          {/* Filtre Statut financier */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Statut :</label>
+            <select
+              value={filterStatut}
+              onChange={e => setFilterStatut(e.target.value)}
+              className="text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="all">Tous statuts financiers</option>
+              <option value="SOLDE">Soldé</option>
+              <option value="PARTIEL">Partiellement soldé</option>
+              <option value="NON_SOLDE">Non soldé</option>
+              <option value="CREDIT">Crédit</option>
+            </select>
+          </div>
+
+          {(search || filterClasse !== 'all' || filterStatut !== 'all' || filterType !== 'all') && (
+            <button
+              onClick={() => { setSearch(''); setFilterClasse('all'); setFilterStatut('all'); setFilterType('all') }}
+              className="text-xs text-primary-600 hover:text-primary-700 font-medium px-2 py-1 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-950/40"
+            >
+              Réinitialiser les filtres
+            </button>
+          )}
         </div>
 
-        {(search || filterClasse !== 'all' || filterStatut !== 'all') && (
-          <button
-            onClick={() => { setSearch(''); setFilterClasse('all'); setFilterStatut('all') }}
-            className="text-xs text-primary-600 hover:text-primary-700 font-medium px-2 py-1 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-950/40"
-          >
-            Réinitialiser les filtres
-          </button>
-        )}
-      </div>
-
-      {/* Tableau des élèves */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Matricule</th>
-              <th className="px-4 py-3 text-left font-medium">Élève</th>
-              <th className="px-4 py-3 text-left font-medium">Classe</th>
-              <th className="px-4 py-3 text-right font-medium">Dû</th>
-              <th className="px-4 py-3 text-right font-medium">Payé</th>
-              <th className="px-4 py-3 text-right font-medium">Reste</th>
-              <th className="px-4 py-3 text-center font-medium">Statut</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {filtered.length === 0 ? (
+        {/* Tableau des élèves */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Search className="h-6 w-6 text-gray-300" />
-                    <p>Aucun élève trouvé avec ces critères de recherche.</p>
-                  </div>
-                </td>
+                <th className="px-4 py-3 text-left font-medium">Matricule</th>
+                <th className="px-4 py-3 text-left font-medium">Élève</th>
+                <th className="px-4 py-3 text-left font-medium">Statut Élève</th>
+                <th className="px-4 py-3 text-left font-medium">Classe</th>
+                <th className="px-4 py-3 text-right font-medium">Dû</th>
+                <th className="px-4 py-3 text-right font-medium">Payé</th>
+                <th className="px-4 py-3 text-right font-medium">Reste</th>
+                <th className="px-4 py-3 text-center font-medium">Statut</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
-            ) : filtered.map(s => (
-              <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs font-semibold text-primary-700 dark:text-primary-400">
-                  {s.matricule}
-                </td>
-                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
-                  <div className="flex items-center gap-3">
-                    {/* Photo d'identité miniature ou Initiales */}
-                    {s.photo ? (
-                      <img
-                        src={s.photo}
-                        alt={`${s.nom} ${s.prenoms}`}
-                        className="w-10 h-10 rounded-xl object-cover border border-gray-200 dark:border-gray-700 shadow-sm shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs shrink-0">
-                        {s.nom.charAt(0)}{s.prenoms.charAt(0)}
-                      </div>
-                    )}
-                    <div>
-                      <div>
-                        <span className="font-semibold">{s.nom}</span> {s.prenoms}
-                        <span className="ml-2 text-xs text-gray-400 font-normal">({s.sexe})</span>
-                      </div>
-                      {s.parent_tel && (
-                        <p className="text-xs text-gray-400">
-                          {s.parent_nom ? `${s.parent_nom} — ` : ''}{s.parent_tel}
-                        </p>
-                      )}
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Search className="h-6 w-6 text-gray-300" />
+                      <p>Aucun élève trouvé avec ces critères de recherche.</p>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">
+                  </td>
+                </tr>
+              ) : filtered.map(s => (
+                <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-primary-700 dark:text-primary-400">
+                    {s.matricule}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-3">
+                      {/* Photo d'identité miniature ou Initiales */}
+                      {s.photo ? (
+                        <img
+                          src={s.photo}
+                          alt={`${s.nom} ${s.prenoms}`}
+                          className="w-10 h-10 rounded-xl object-cover border border-gray-200 dark:border-gray-700 shadow-sm shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs shrink-0">
+                          {s.nom.charAt(0)}{s.prenoms.charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <div>
+                          <span className="font-semibold">{s.nom}</span> {s.prenoms}
+                          <span className="ml-2 text-xs text-gray-400 font-normal">({s.sexe})</span>
+                        </div>
+                        {s.parent_tel && (
+                          <p className="text-xs text-gray-400">
+                            {s.parent_nom ? `${s.parent_nom} — ` : ''}{s.parent_tel}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.student_type === 'AFFECTE_ETAT' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                        Affecté État
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                        Non-Affecté
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">
                   {s.classe_nom ? (
                     <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-xs">
                       {s.classe_nom}
@@ -573,6 +625,15 @@ export default function Students() {
             <Input label="Date de naissance" type="date" value={form.date_naissance} onChange={e => setForm(f => ({ ...f, date_naissance: e.target.value }))} />
           </div>
           <Select
+            label="Statut d'affectation officiel *"
+            value={form.student_type}
+            onChange={e => setForm(f => ({ ...f, student_type: e.target.value as StudentType }))}
+            options={[
+              { value: 'AFFECTE_ETAT', label: "Affecté de l'État (Barème subventionné : 35 000 à 52 000 FCFA)" },
+              { value: 'NON_AFFECTE', label: "Non-Affecté (Barème plein : 100 000 à 152 000 FCFA)" },
+            ]}
+          />
+          <Select
             label="Classe"
             value={form.classe_id}
             onChange={e => setForm(f => ({ ...f, classe_id: e.target.value }))}
@@ -582,14 +643,24 @@ export default function Students() {
             <Input label="Nom du parent" value={form.parent_nom} onChange={e => setForm(f => ({ ...f, parent_nom: e.target.value }))} />
             <Input label="Téléphone parent" value={form.parent_tel} onChange={e => setForm(f => ({ ...f, parent_tel: e.target.value }))} />
           </div>
-          <Input
-            label="Frais additionnels (FCFA)"
-            type="number"
-            min={0}
-            value={form.frais_additionnels}
-            onChange={e => setForm(f => ({ ...f, frais_additionnels: e.target.value }))}
-            hint="Cantine, transport, etc. — s'ajoute aux frais de scolarité de la classe."
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Frais additionnels (FCFA)"
+              type="number"
+              min={0}
+              value={form.frais_additionnels}
+              onChange={e => setForm(f => ({ ...f, frais_additionnels: e.target.value }))}
+              hint="Cantine, transport, etc."
+            />
+            <Input
+              label="Remise / Bourse (FCFA)"
+              type="number"
+              min={0}
+              value={form.remise}
+              onChange={e => setForm(f => ({ ...f, remise: e.target.value }))}
+              hint="Déduction accordée"
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setStudentModal({ open: false, editing: null })}>Annuler</Button>
             <Button type="submit" loading={saving}>{studentModal.editing ? 'Enregistrer les modifications' : 'Inscrire l’élève'}</Button>
@@ -664,9 +735,30 @@ export default function Students() {
               label="Mode de paiement"
               value={payMode}
               onChange={e => setPayMode(e.target.value)}
-              options={['Espèces', 'Mobile Money', 'Virement bancaire', 'Chèque']}
+              options={['Espèces', 'Orange Money', 'MTN Money', 'Moov Money', 'Wave', 'Virement bancaire', 'Chèque']}
             />
+            {['orange money', 'mtn money', 'moov money', 'wave', 'virement bancaire', 'chèque'].includes(payMode.toLowerCase()) && (
+              <Input
+                label="Référence / N° de transaction *"
+                value={payReference}
+                onChange={e => setPayReference(e.target.value)}
+                placeholder="Ex : CI260926.1432.A84920"
+                required
+              />
+            )}
             <Input label="Motif" value={payMotif} onChange={e => setPayMotif(e.target.value)} />
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="allowCreditCheck"
+                checked={allowCredit}
+                onChange={e => setAllowCredit(e.target.checked)}
+                className="rounded text-primary-600"
+              />
+              <label htmlFor="allowCreditCheck" className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                Autoriser le trop-perçu (génère un solde créditeur)
+              </label>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setPayModal(null)}>Annuler</Button>
               <Button type="submit" loading={paying}>Encaisser</Button>

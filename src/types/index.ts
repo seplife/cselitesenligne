@@ -19,7 +19,7 @@ export interface RolePermissions {
 }
 
 export type TabId =
-  | 'dashboard' | 'vault' | 'students' | 'payments' | 'qr' | 'reminders'
+  | 'dashboard' | 'vault' | 'students' | 'tuition' | 'payments' | 'qr' | 'reminders'
   | 'stats' | 'alerts' | 'caisse' | 'vacataires' | 'personnel' | 'payrollcal'
   | 'debts' | 'documents' | 'audit' | 'classes' | 'settings';
 
@@ -34,10 +34,12 @@ export interface Settings {
   id: string;
   school_name: string;
   sigle: string;
+  code_etablissement?: string;
   ville: string;
   telephone?: string;
   email?: string;
   annee_scolaire: string;
+  academic_years?: string[];
   matricule_counter: number;
   recu_counter: number;
   dep_counter: number;
@@ -57,7 +59,60 @@ export interface Class {
   created_at: string;
 }
 
-export type StudentStatut = 'NON_SOLDE' | 'SOLDE' | 'CREDIT';
+export type StudentType = 'AFFECTE_ETAT' | 'NON_AFFECTE';
+
+export type StudentStatut = 'NON_SOLDE' | 'SOLDE' | 'CREDIT' | 'PARTIEL' | 'EN_RETARD';
+
+export interface TuitionSchedule {
+  id: string;
+  academic_year: string; // Ex: "2026-2027"
+  student_type: StudentType;
+  level_group: string; // Ex: "6E_5E_4E", "3E", "2NDE_1ERE", "2NDE", "1ERE", "TLE"
+  label: string;
+  classes: string[]; // Noms de classes rattachées, ex: ["6ème1", "6ème2"]
+  registration_fee: number;
+  october_due: number;
+  november_due: number;
+  december_due: number;
+  january_due: number;
+  total_amount: number;
+  currency: string; // "XOF"
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Installment {
+  id: string;
+  label: string; // "INSCRIPTION", "FIN OCTOBRE", "FIN NOVEMBRE", "FIN DÉCEMBRE", "FIN JANVIER"
+  due_date: string; // "2026-10-31"
+  montant_prevu: number;
+  montant_paye: number;
+  reste: number;
+  statut: 'PAYE' | 'PARTIEL' | 'IMPAYE' | 'EN_RETARD' | 'A_VENIR';
+  retard_jours: number;
+}
+
+export interface StudentFinancialAccount {
+  student_id: string;
+  student_nom: string;
+  student_matricule: string;
+  classe_nom: string;
+  student_type: StudentType;
+  schedule?: TuitionSchedule;
+  total_scolarite: number;
+  frais_additionnels: number;
+  total_du: number;
+  total_paye: number;
+  reste: number;
+  pourcentage_paye: number;
+  statut: StudentStatut;
+  montant_echu: number;
+  retard_max_jours: number;
+  installments: Installment[];
+  derniere_relance?: PaymentReminder;
+  nombre_relances: number;
+}
 
 export interface Student {
   id: string;
@@ -65,12 +120,15 @@ export interface Student {
   nom: string;
   prenoms: string;
   sexe: 'M' | 'F';
+  student_type?: StudentType;
   date_naissance?: string;
   classe_id?: string;
   classe_nom?: string;
   parent_nom?: string;
   parent_tel?: string;
+  scolarite_base?: number;
   frais_additionnels: number;
+  remise?: number;
   total_du: number;
   total_paye: number;
   statut: StudentStatut;
@@ -88,16 +146,46 @@ export interface Payment {
   student_nom: string;
   student_matricule: string;
   classe_nom?: string;
+  student_type?: StudentType;
   montant: number;
   mode: string;
   motif: string;
+  reference?: string;
   recu_numero: string;
   caissiere: string;
   annule: boolean;
+  ancien_solde?: number;
+  nouveau_solde?: number;
+  notes?: string;
   total_du_apres?: number;
   total_paye_apres?: number;
   date: string;
   created_at: string;
+}
+
+export type ReminderChannel = 'WHATSAPP' | 'SMS' | 'EMAIL' | 'APPEL' | 'IMPRESSION' | 'NOTIFICATION';
+export type ReminderStatus = 'BROUILLON' | 'ENVOYEE' | 'DELIVREE' | 'ECHOUEE' | 'LUE';
+export type ReminderMotif = 'SCOLARITE_IMPAYEE' | 'ECHEANCE_DEPASSEE' | 'PAIEMENT_PARTIEL' | 'SOLDE_GENERAL';
+
+export interface PaymentReminder {
+  id: string;
+  student_id: string;
+  student_nom: string;
+  student_matricule: string;
+  classe_nom: string;
+  student_type?: StudentType;
+  parent_nom?: string;
+  parent_tel?: string;
+  amount_due_at_reminder: number;
+  overdue_amount: number;
+  channel: ReminderChannel;
+  motif: ReminderMotif;
+  message: string;
+  status: ReminderStatus;
+  sent_at: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Reminder {

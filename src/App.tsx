@@ -23,11 +23,13 @@ const Documents      = lazy(() => import('@/pages/Documents'))
 const Audit          = lazy(() => import('@/pages/Audit'))
 const Classes        = lazy(() => import('@/pages/Classes'))
 const Settings       = lazy(() => import('@/pages/Settings'))
+const TuitionManagement = lazy(() => import('@/pages/TuitionManagement'))
 
 const PAGE_MAP = {
   dashboard:  Dashboard,
   vault:      Vault,
   students:   Students,
+  tuition:    TuitionManagement,
   payments:   Payments,
   qr:         QrScanner,
   reminders:  Reminders,

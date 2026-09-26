@@ -5,7 +5,8 @@ import logoCse from '@/assets/logo_cse.png'
 import {
   LayoutDashboard, Lock, GraduationCap, DollarSign, QrCode, Bell,
   BarChart2, AlertTriangle, Wallet, Users2, UserSquare2, Calendar,
-  CreditCard, FolderOpen, ScrollText, Tag, Settings, LogOut, ChevronLeft, KeyRound
+  CreditCard, FolderOpen, ScrollText, Tag, Settings, LogOut, ChevronLeft, KeyRound,
+  ReceiptText
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { ChangePasswordForm } from '@/components/AccountTools'
@@ -15,6 +16,7 @@ const NAV_ITEMS: { id: TabId; icon: React.ReactNode; label: string }[] = [
   { id: 'dashboard',  icon: <LayoutDashboard className="h-4 w-4" />, label: 'Tableau de bord' },
   { id: 'vault',      icon: <Lock           className="h-4 w-4" />, label: 'Coffre-fort' },
   { id: 'students',   icon: <GraduationCap  className="h-4 w-4" />, label: 'Élèves' },
+  { id: 'tuition',    icon: <ReceiptText    className="h-4 w-4" />, label: 'Scolarités & Échéances' },
   { id: 'payments',   icon: <DollarSign     className="h-4 w-4" />, label: 'Paiements' },
   { id: 'qr',         icon: <QrCode         className="h-4 w-4" />, label: 'QR & Scanner' },
   { id: 'reminders',  icon: <Bell           className="h-4 w-4" />, label: 'Relances' },

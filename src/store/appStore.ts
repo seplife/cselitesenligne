@@ -5,7 +5,7 @@ import { todayKey, isToday, isThisMonth } from '@/lib/utils'
 import type {
   RoleKey, Settings, Class, Student, Payment, Reminder,
   Expense, CashClosure, Teacher, TeacherHour, Staff, StaffPayment,
-  Debt, Document, AuditLog, Alert, TabId
+  Debt, Document, AuditLog, Alert, TabId, TuitionSchedule, PaymentReminder
 } from '@/types'
 
 // Copie côté client des permissions — sert uniquement à l'affichage
@@ -14,17 +14,17 @@ import type {
 export const ROLES = {
   directeur: {
     label: 'Directeur', icon: '👔',
-    tabs: ['dashboard','vault','students','payments','qr','reminders','stats','alerts','caisse','vacataires','personnel','payrollcal','debts','documents','audit','classes','settings'] as TabId[],
+    tabs: ['dashboard','vault','students','tuition','payments','qr','reminders','stats','alerts','caisse','vacataires','personnel','payrollcal','debts','documents','audit','classes','settings'] as TabId[],
     perms: { editStudents:true, pay:true, manageCaisse:true, validateExpense:true, manageVacataires:true, managePersonnel:true, seeAudit:true, seeSettings:true, editClasses:true, manageDebts:true, manageDocuments:true }
   },
   caissiere: {
     label: 'Caissière', icon: '💰',
-    tabs: ['dashboard','students','payments','qr','reminders','stats','alerts','caisse','vacataires','personnel','payrollcal','documents','classes'] as TabId[],
+    tabs: ['dashboard','students','tuition','payments','qr','reminders','stats','alerts','caisse','vacataires','personnel','payrollcal','documents','classes'] as TabId[],
     perms: { editStudents:true, pay:true, manageCaisse:true, validateExpense:false, manageVacataires:false, managePersonnel:false, seeAudit:false, seeSettings:false, editClasses:false, manageDebts:false, manageDocuments:true }
   },
   secretaire: {
     label: 'Secrétaire', icon: '🗂️',
-    tabs: ['dashboard','students','qr','reminders','stats','documents','classes'] as TabId[],
+    tabs: ['dashboard','students','tuition','qr','reminders','stats','documents','classes'] as TabId[],
     perms: { editStudents:true, pay:false, manageCaisse:false, validateExpense:false, manageVacataires:false, managePersonnel:false, seeAudit:false, seeSettings:false, editClasses:false, manageDebts:false, manageDocuments:true }
   },
   educateur: {
@@ -34,12 +34,12 @@ export const ROLES = {
   },
   comptable: {
     label: 'Comptable / Contrôleur', icon: '📊',
-    tabs: ['dashboard','stats','alerts','caisse','vacataires','personnel','payrollcal','debts','documents','audit','classes'] as TabId[],
+    tabs: ['dashboard','students','tuition','stats','alerts','caisse','vacataires','personnel','payrollcal','debts','documents','audit','classes'] as TabId[],
     perms: { editStudents:false, pay:false, manageCaisse:false, validateExpense:false, manageVacataires:false, managePersonnel:false, seeAudit:true, seeSettings:false, editClasses:false, manageDebts:false, manageDocuments:false }
   },
   consultation: {
     label: 'Consultation', icon: '👁️',
-    tabs: ['dashboard','students','stats','caisse','vacataires','personnel','payrollcal','debts','documents','classes'] as TabId[],
+    tabs: ['dashboard','students','tuition','stats','caisse','vacataires','personnel','payrollcal','debts','documents','classes'] as TabId[],
     perms: { editStudents:false, pay:false, manageCaisse:false, validateExpense:false, manageVacataires:false, managePersonnel:false, seeAudit:false, seeSettings:false, editClasses:false, manageDebts:false, manageDocuments:false }
   },
 } as const
@@ -53,7 +53,9 @@ interface AppStore {
   classes: Class[]
   students: Student[]
   payments: Payment[]
+  tuitionSchedules: TuitionSchedule[]
   reminders: Reminder[]
+  paymentReminders: PaymentReminder[]
   expenses: Expense[]
   cashClosures: CashClosure[]
   teachers: Teacher[]
@@ -90,7 +92,9 @@ const TABLE_MAP: Record<string, { key: keyof AppStore; path: string; single?: bo
   classes: { key: 'classes', path: '/api/classes' },
   students: { key: 'students', path: '/api/students' },
   payments: { key: 'payments', path: '/api/payments' },
+  tuition_schedules: { key: 'tuitionSchedules', path: '/api/tuition-schedules' },
   reminders: { key: 'reminders', path: '/api/reminders' },
+  payment_reminders: { key: 'paymentReminders', path: '/api/payment-reminders' },
   expenses: { key: 'expenses', path: '/api/expenses' },
   cash_closures: { key: 'cashClosures', path: '/api/cash_closures' },
   teachers: { key: 'teachers', path: '/api/teachers' },
@@ -111,7 +115,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   classes: [],
   students: [],
   payments: [],
+  tuitionSchedules: [],
   reminders: [],
+  paymentReminders: [],
   expenses: [],
   cashClosures: [],
   teachers: [],
@@ -157,8 +163,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     clearSession()
     set({
       role: null, userLabel: null, settings: null, classes: [], students: [], payments: [],
-      reminders: [], expenses: [], cashClosures: [], teachers: [], teacherHours: [], staff: [],
-      staffPayments: [], debts: [], documents: [], auditLogs: [], loading: false,
+      tuitionSchedules: [], reminders: [], paymentReminders: [], expenses: [], cashClosures: [],
+      teachers: [], teacherHours: [], staff: [], staffPayments: [], debts: [], documents: [],
+      auditLogs: [], loading: false,
     })
   },
 
@@ -177,7 +184,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (get().settings === null) set({ loading: true })
     try {
       const [
-        settings, classes, students, payments, reminders,
+        settings, classes, students, payments, tuitionSchedules,
+        reminders, paymentReminders,
         expenses, cashClosures, teachers, teacherHours, staff,
         staffPayments, debts, documents, auditLogs
       ] = await Promise.all([
@@ -185,7 +193,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         api.get<Class[]>('/api/classes'),
         api.get<Student[]>('/api/students'),
         api.get<Payment[]>('/api/payments'),
+        api.get<TuitionSchedule[]>('/api/tuition-schedules'),
         api.get<Reminder[]>('/api/reminders'),
+        api.get<PaymentReminder[]>('/api/payment-reminders'),
         api.get<Expense[]>('/api/expenses'),
         api.get<CashClosure[]>('/api/cash_closures'),
         api.get<Teacher[]>('/api/teachers'),
@@ -198,7 +208,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ])
 
       set({
-        settings, classes, students, payments, reminders, expenses, cashClosures,
+        settings, classes, students, payments, tuitionSchedules,
+        reminders, paymentReminders, expenses, cashClosures,
         teachers, teacherHours, staff, staffPayments, debts, documents, auditLogs,
         loading: false,
       })
