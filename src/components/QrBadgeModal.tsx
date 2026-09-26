@@ -23,43 +23,41 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
   const isStudent = !!student
   const entity = student || staff
 
-  // Génération du texte enrichi pour le scan QR
+  // Génération de l'URL web de vérification pour le QR code
   const qrContent = React.useMemo(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+    const baseUrl = `${origin}${pathname}`
+
     if (student) {
-      return JSON.stringify({
-        type: 'student',
+      const payload = {
+        t: 's',
         id: student.id,
-        matricule: student.matricule,
-        nom: student.nom,
-        prenoms: student.prenoms,
-        classe: student.classe_nom || 'Non assigné',
-        sexe: student.sexe,
-        date_naissance: student.date_naissance || '',
-        parent: student.parent_nom || '',
-        parent_tel: student.parent_tel || '',
-        statut: student.statut,
-        total_du: student.total_du,
-        total_paye: student.total_paye,
-        reste: student.total_du - student.total_paye,
-        token: student.token,
+        m: student.matricule,
+        n: `${student.nom} ${student.prenoms}`,
+        c: student.classe_nom || 'Non assigné',
+        s: student.statut === 'SOLDE' ? 'SOLDÉ' : student.statut === 'CREDIT' ? 'CRÉDIT' : 'NON SOLDÉ',
+        d: student.date_naissance || '',
+        u: student.parent_tel || '',
+        tok: student.token,
         school: settings?.school_name || 'CSE DIVO',
         annee: settings?.annee_scolaire || '',
-      })
+      }
+      return `${baseUrl}?verify=${encodeURIComponent(JSON.stringify(payload))}`
     } else if (staff) {
-      return JSON.stringify({
-        type: 'staff',
+      const payload = {
+        t: 'p',
         id: staff.id,
-        matricule: staff.matricule || 'PER',
-        nom: staff.nom,
-        prenoms: staff.prenoms,
-        poste: staff.poste || 'Personnel',
-        telephone: staff.telephone || '',
-        salaire_base: staff.salaire_base,
-        date_embauche: staff.date_embauche || '',
-        actif: staff.actif,
+        m: staff.matricule || 'PER',
+        n: `${staff.nom} ${staff.prenoms}`,
+        c: staff.poste || 'Personnel',
+        s: staff.actif ? 'ACTIF' : 'INACTIF',
+        u: staff.telephone || '',
+        d: staff.date_embauche || '',
         school: settings?.school_name || 'CSE DIVO',
         annee: settings?.annee_scolaire || '',
-      })
+      }
+      return `${baseUrl}?verify=${encodeURIComponent(JSON.stringify(payload))}`
     }
     return ''
   }, [student, staff, settings])

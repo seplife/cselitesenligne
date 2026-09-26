@@ -90,10 +90,26 @@ function ApiErrorMessage() {
   )
 }
 
+import PublicVerify from '@/pages/PublicVerify'
+
 export default function App() {
   const { role, loading, loadAll, activeTab, hasTab } = useAppStore()
   const [initError, setInitError] = React.useState(false)
   const [initialized, setInitialized] = React.useState(false)
+  const [verifyData, setVerifyData] = React.useState<any>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const v = params.get('verify') || params.get('qr')
+      if (v) {
+        if (v.startsWith('{') && v.endsWith('}')) {
+          return JSON.parse(v)
+        } else {
+          return { m: v }
+        }
+      }
+    } catch {}
+    return null
+  })
 
   useEffect(() => {
     // Pas de session locale : on affiche directement l'écran de connexion.
@@ -111,6 +127,18 @@ export default function App() {
         setInitialized(true)
       })
   }, [])
+
+  if (verifyData) {
+    return (
+      <PublicVerify
+        data={verifyData}
+        onClose={() => {
+          window.history.replaceState({}, '', window.location.pathname)
+          setVerifyData(null)
+        }}
+      />
+    )
+  }
 
   if (!initialized || loading) return <AppLoader />
   if (initError) return <ApiErrorMessage />

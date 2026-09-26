@@ -1,14 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 import { useAppStore } from '@/store/appStore'
 import { fmt, fmtDateShort } from '@/lib/utils'
 import {
   QrCode, Camera, CameraOff, Search, User, School, Phone,
-  CreditCard, CheckCircle2, AlertCircle, Calendar, ArrowRight, X
+  CreditCard, CheckCircle2, AlertCircle, Calendar, ArrowRight, X,
+  UploadCloud, Volume2
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { QrBadgeModal } from '@/components/QrBadgeModal'
 import type { Student, Staff } from '@/types'
 import toast from 'react-hot-toast'
+
+// Fonction pour émettre un bip de confirmation lors d'un scan réussi
+function playSuccessBeep() {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime) // Note La5
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15)
+    osc.connect(gain)
+    gain.connect(audioCtx.destination)
+    osc.start()
+    osc.stop(audioCtx.currentTime + 0.15)
+  } catch {
+    // Si l'audio n'est pas autorisé par l'utilisateur, continuer sans son
+  }
+}
 
 export default function QrScanner() {
   const { students, staff, payments, staffPayments, settings } = useAppStore()
@@ -20,114 +41,217 @@ export default function QrScanner() {
   const [badgeModalStudent, setBadgeModalStudent] = useState<Student | null>(null)
   const [badgeModalStaff, setBadgeModalStaff] = useState<Staff | null>(null)
 
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Analyse et recherche de l'élève ou du personnel
+  // Traitement d'un texte décodé ou saisi
   function handleScanLookup(input: string) {
-    const raw = input.trim()
+    let raw = input.trim()
     if (!raw) return
 
     setNotFound(false)
-    setFoundStudent(null)
-    setFoundStaff(null)
 
-    // Cas 1 : Données JSON issues du QR Code généré
+    // Si le scan est une URL (ex: https://domaine.com/?verify=%7B...%7D)
+    if (raw.includes('?verify=') || raw.includes('&verify=')) {
+      try {
+        const urlObj = new URL(raw, window.location.origin)
+        const vParam = urlObj.searchParams.get('verify')
+        if (vParam) raw = vParam
+      } catch {
+        const match = raw.match(/[?&]verify=([^&#]+)/)
+        if (match && match[1]) {
+          try { raw = decodeURIComponent(match[1]) } catch {}
+        }
+      }
+    } else if (raw.includes('?qr=') || raw.includes('&qr=')) {
+      try {
+        const urlObj = new URL(raw, window.location.origin)
+        const qParam = urlObj.searchParams.get('qr')
+        if (qParam) raw = qParam
+      } catch {}
+    }
+
+    // Cas 1 : Données JSON
     if (raw.startsWith('{') && raw.endsWith('}')) {
       try {
         const parsed = JSON.parse(raw)
-        if (parsed.type === 'student' && (parsed.id || parsed.matricule || parsed.token)) {
+        // Format payload 't' = 's' (student) ou 'type' = 'student'
+        const isStud = parsed.t === 's' || parsed.type === 'student'
+        const isStf = parsed.t === 'p' || parsed.type === 'staff'
+
+        if (isStud) {
           const s = students.find(
             x => (parsed.id && x.id === parsed.id) ||
+                 (parsed.m && x.matricule.toUpperCase() === parsed.m.toUpperCase()) ||
                  (parsed.matricule && x.matricule.toUpperCase() === parsed.matricule.toUpperCase()) ||
-                 (parsed.token && x.token === parsed.token)
+                 (parsed.tok && x.token === parsed.tok)
           )
           if (s) {
+            playSuccessBeep()
             setFoundStudent(s)
+            setFoundStaff(null)
             toast.success(`Élève identifié : ${s.nom} ${s.prenoms}`)
             return
+          } else if (parsed.m || parsed.n) {
+            // Créer un objet virtuel d'affichage si l'élève n'est pas dans la session locale
+            const pseudoStudent: Student = {
+              id: parsed.id || 'scan-temp',
+              matricule: parsed.m || parsed.matricule || 'N/A',
+              nom: parsed.n ? parsed.n.split(' ')[0] : 'ÉLÈVE',
+              prenoms: parsed.n ? parsed.n.split(' ').slice(1).join(' ') : '',
+              sexe: 'M',
+              classe_nom: parsed.c || parsed.classe || 'Non renseigné',
+              statut: (parsed.s === 'SOLDÉ' ? 'SOLDE' : parsed.s === 'CRÉDIT' ? 'CREDIT' : 'NON_SOLDE'),
+              total_du: parsed.total_du || 0,
+              total_paye: parsed.total_paye || 0,
+              frais_additionnels: 0,
+              parent_tel: parsed.u || parsed.parent_tel || '',
+              parent_nom: parsed.parent || '',
+              date_naissance: parsed.d || '',
+              token: parsed.tok || '',
+              actif: true,
+              date_inscription: '',
+              created_at: '',
+              updated_at: '',
+            }
+            playSuccessBeep()
+            setFoundStudent(pseudoStudent)
+            setFoundStaff(null)
+            toast.success(`Badge élève vérifié : ${pseudoStudent.nom}`)
+            return
           }
-        } else if (parsed.type === 'staff' && (parsed.id || parsed.matricule)) {
+        } else if (isStf) {
           const st = staff.find(
             x => (parsed.id && x.id === parsed.id) ||
+                 (parsed.m && (x.matricule || '').toUpperCase() === parsed.m.toUpperCase()) ||
                  (parsed.matricule && (x.matricule || '').toUpperCase() === parsed.matricule.toUpperCase())
           )
           if (st) {
+            playSuccessBeep()
             setFoundStaff(st)
+            setFoundStudent(null)
             toast.success(`Personnel identifié : ${st.nom} ${st.prenoms}`)
             return
           }
         }
       } catch {
-        // En cas d'échec de parsing JSON, on poursuit la recherche textuelle
+        // En cas d'échec de parsing JSON, on passe à la recherche classique
       }
     }
 
     const q = raw.toUpperCase()
 
-    // Recherche dans les élèves (matricule, token, ou nom complet)
+    // Recherche dans les élèves
     const s = students.find(
       x => x.matricule.toUpperCase() === q ||
            x.token === raw ||
            x.id === raw ||
+           `${x.nom} ${x.prenoms}`.toUpperCase() === q ||
            `${x.nom} ${x.prenoms}`.toUpperCase().includes(q)
     )
     if (s) {
+      playSuccessBeep()
       setFoundStudent(s)
+      setFoundStaff(null)
       toast.success(`Élève identifié : ${s.nom} ${s.prenoms}`)
       return
     }
 
-    // Recherche dans le personnel (matricule, id, ou nom complet)
+    // Recherche dans le personnel
     const st = staff.find(
       x => (x.matricule && x.matricule.toUpperCase() === q) ||
            x.id === raw ||
+           `${x.nom} ${x.prenoms}`.toUpperCase() === q ||
            `${x.nom} ${x.prenoms}`.toUpperCase().includes(q)
     )
     if (st) {
+      playSuccessBeep()
       setFoundStaff(st)
+      setFoundStudent(null)
       toast.success(`Personnel identifié : ${st.nom} ${st.prenoms}`)
       return
     }
 
     setNotFound(true)
-    toast.error('Aucune correspondance trouvée.')
+    setFoundStudent(null)
+    setFoundStaff(null)
+    toast.error('Aucune correspondance trouvée avec ce code.')
   }
 
-  // Gestion de la caméra vidéo
-  async function toggleCamera() {
-    if (cameraActive) {
-      stopCamera()
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
-        })
-        streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.play()
-        }
-        setCameraActive(true)
-        toast.success('Caméra activée. Pointez vers le QR code.')
-      } catch (err) {
-        console.error('Erreur accès caméra', err)
-        toast.error('Impossible d’accéder à la caméra. Vérifiez les autorisations du navigateur.')
+  // Démarrer la caméra avec html5-qrcode
+  async function startCamera() {
+    try {
+      if (!html5QrCodeRef.current) {
+        html5QrCodeRef.current = new Html5Qrcode('qr-reader-box')
       }
+
+      await html5QrCodeRef.current.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+        },
+        (decodedText) => {
+          // Détection réussie !
+          handleScanLookup(decodedText)
+        },
+        () => {
+          // Erreur de frame (normal quand aucun QR n'est dans le champ)
+        }
+      )
+      setCameraActive(true)
+      toast.success('Caméra active. Visez le QR code.')
+    } catch (err) {
+      console.error('Erreur démarrage caméra', err)
+      toast.error('Impossible d’activer la caméra. Vérifiez les permissions de votre navigateur.')
+      setCameraActive(false)
     }
   }
 
-  function stopCamera() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
+  // Arrêter la caméra
+  async function stopCamera() {
+    if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+      try {
+        await html5QrCodeRef.current.stop()
+      } catch (e) {
+        console.error('Erreur arrêt caméra', e)
+      }
     }
     setCameraActive(false)
   }
 
+  function toggleCamera() {
+    if (cameraActive) {
+      stopCamera()
+    } else {
+      startCamera()
+    }
+  }
+
+  // Scanner un fichier image / photo contenant un QR code
+  async function handleImageFile(file: File) {
+    try {
+      let scanner = html5QrCodeRef.current
+      if (!scanner) {
+        scanner = new Html5Qrcode('qr-reader-box')
+        html5QrCodeRef.current = scanner
+      }
+      toast.loading('Analyse de l’image…', { id: 'file-scan' })
+      const result = await scanner.scanFile(file, false)
+      toast.dismiss('file-scan')
+      handleScanLookup(result)
+    } catch (err) {
+      toast.dismiss('file-scan')
+      toast.error('Aucun code QR détecté dans cette image.')
+    }
+  }
+
   useEffect(() => {
     return () => {
-      stopCamera()
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(() => {})
+      }
     }
   }, [])
 
@@ -136,7 +260,7 @@ export default function QrScanner() {
     ? payments.filter(p => !p.annule && p.student_id === foundStudent.id).slice(0, 5)
     : []
 
-  // Paiements de salaire du personnel scanné
+  // Fiches de paie du personnel scanné
   const staffPaies = foundStaff
     ? staffPayments.filter(p => p.staff_id === foundStaff.id).slice(0, 5)
     : []
@@ -150,12 +274,13 @@ export default function QrScanner() {
           <span>Scanner QR Code & Identification</span>
         </h1>
         <p className="text-sm text-gray-500">
-          Scannez le badge d’un élève ou d’un membre du personnel pour afficher sa fiche complète.
+          Vérification instantanée des cartes d'élèves et du personnel par caméra, image ou matricule
         </p>
       </div>
 
-      {/* Boîte de recherche & Scanner */}
+      {/* Boîte de scan et recherche */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 space-y-4">
+        {/* Champ de saisie manuelle ou douchette */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="h-5 w-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -163,7 +288,7 @@ export default function QrScanner() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleScanLookup(query)}
-              placeholder="Saisir ou scanner : Matricule, Token, ou données QR…"
+              placeholder="Scanner avec douchette ou saisir un matricule / token…"
               autoFocus
               className="w-full pl-11 pr-9 py-2.5 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-medium"
             />
@@ -179,40 +304,54 @@ export default function QrScanner() {
           <Button onClick={() => handleScanLookup(query)}>
             Vérifier
           </Button>
-          <button
-            onClick={toggleCamera}
-            title={cameraActive ? 'Désactiver la caméra' : 'Activer la caméra pour scanner'}
-            className={`p-2.5 rounded-xl border transition-colors ${
-              cameraActive
-                ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:border-red-800'
-                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700'
-            }`}
-          >
-            {cameraActive ? <CameraOff className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
-          </button>
         </div>
 
-        {/* Vue caméra en direct */}
-        {cameraActive && (
-          <div className="relative rounded-2xl overflow-hidden bg-black aspect-video max-h-60 border-2 border-primary-500 shadow-inner flex items-center justify-center">
-            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-            <div className="absolute inset-0 border-2 border-white/40 pointer-events-none flex items-center justify-center">
-              <div className="w-48 h-48 border-2 border-dashed border-primary-400 rounded-2xl animate-pulse" />
-            </div>
-            <p className="absolute bottom-2 text-xs text-white/80 bg-black/60 px-3 py-1 rounded-full">
-              Pointez la caméra vers le code QR
-            </p>
-          </div>
-        )}
+        {/* Boutons d'activation Caméra et Import Image */}
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+          <button
+            onClick={toggleCamera}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm ${
+              cameraActive
+                ? 'bg-red-600 text-white hover:bg-red-700 ring-2 ring-red-300'
+                : 'bg-primary-600 text-white hover:bg-primary-700'
+            }`}
+          >
+            {cameraActive ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+            <span>{cameraActive ? 'Éteindre la caméra' : 'Activer la caméra pour scanner'}</span>
+          </button>
+
+          <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 cursor-pointer transition-colors border border-gray-200 dark:border-gray-700">
+            <UploadCloud className="h-4 w-4" />
+            <span>Scanner une photo QR</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleImageFile(file)
+              }}
+            />
+          </label>
+        </div>
+
+        {/* Zone de rendu vidéo du scanner html5-qrcode */}
+        <div
+          id="qr-reader-box"
+          className={`w-full max-w-sm mx-auto overflow-hidden rounded-2xl border-2 border-primary-500 shadow-md ${
+            cameraActive ? 'block' : 'hidden'
+          }`}
+        />
 
         {/* Message non trouvé */}
         {notFound && (
           <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-300 text-sm flex items-center gap-3">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <div>
-              <p className="font-semibold">Aucun dossier trouvé</p>
+              <p className="font-semibold">Aucun élève ou personnel correspondant</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                Vérifiez le matricule ou le token scanné. Assurez-vous que l'élève ou le personnel est bien enregistré dans l'application.
+                Le code scanné n'est associé à aucun dossier dans la base. Vérifiez l'année scolaire et le matricule.
               </p>
             </div>
           </div>
@@ -224,11 +363,12 @@ export default function QrScanner() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-md border border-emerald-200 dark:border-emerald-800 space-y-5 animate-in fade-in duration-200">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-4">
             <div className="flex items-center gap-3.5">
+              {/* Photo d'identité de l'élève */}
               {foundStudent.photo ? (
                 <img
                   src={foundStudent.photo}
                   alt={`${foundStudent.nom} ${foundStudent.prenoms}`}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md shrink-0"
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md shrink-0 bg-white"
                 />
               ) : (
                 <div className="w-16 h-16 rounded-2xl bg-primary-100 dark:bg-primary-950/60 border border-primary-200 dark:border-primary-800 flex items-center justify-center text-primary-700 dark:text-primary-300 font-extrabold text-xl shrink-0">
@@ -264,11 +404,11 @@ export default function QrScanner() {
               icon={<QrCode className="h-4 w-4" />}
               onClick={() => setBadgeModalStudent(foundStudent)}
             >
-              Badge & QR
+              Voir le Badge
             </Button>
           </div>
 
-          {/* Situation financière de l'élève */}
+          {/* Situation financière */}
           <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700">
             <div className="text-center">
               <span className="text-xs text-gray-400 block font-medium">Total Dû</span>
@@ -297,9 +437,11 @@ export default function QrScanner() {
               <p className="text-gray-800 dark:text-gray-200">
                 Date de naissance : <strong>{foundStudent.date_naissance || 'Non renseignée'}</strong>
               </p>
-              <p className="text-gray-800 dark:text-gray-200">
-                Inscrit le : <strong>{fmtDateShort(foundStudent.date_inscription)}</strong>
-              </p>
+              {foundStudent.date_inscription && (
+                <p className="text-gray-800 dark:text-gray-200 text-xs">
+                  Inscrit le : <strong>{fmtDateShort(foundStudent.date_inscription)}</strong>
+                </p>
+              )}
             </div>
 
             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/40 space-y-1">
@@ -381,7 +523,7 @@ export default function QrScanner() {
               icon={<QrCode className="h-4 w-4" />}
               onClick={() => setBadgeModalStaff(foundStaff)}
             >
-              Badge & QR
+              Voir le Badge
             </Button>
           </div>
 
@@ -399,9 +541,11 @@ export default function QrScanner() {
               ) : (
                 <p className="text-xs text-gray-400">Aucun numéro de téléphone</p>
               )}
-              <p className="text-gray-800 dark:text-gray-200 text-xs">
-                Embauché le : <strong>{fmtDateShort(foundStaff.date_embauche)}</strong>
-              </p>
+              {foundStaff.date_embauche && (
+                <p className="text-gray-800 dark:text-gray-200 text-xs">
+                  Embauché le : <strong>{fmtDateShort(foundStaff.date_embauche)}</strong>
+                </p>
+              )}
             </div>
 
             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/40 space-y-1">
