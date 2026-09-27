@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { fmt, fmtDateShort } from '@/lib/utils'
-import { Download, Printer, Copy, Check, QrCode as QrIcon, User, School, Phone, CreditCard } from 'lucide-react'
+import { Download, Printer, Copy, Check, QrCode as QrIcon, User, School, Phone, MessageSquare } from 'lucide-react'
 import type { Student, Staff, Settings } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -23,7 +23,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
   const isStudent = !!student
   const entity = student || staff
 
-  // Génération de l'URL web de vérification pour le QR code
+  // Génération de l'URL de vérification pour le QR code
   const qrContent = React.useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
@@ -62,25 +62,26 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
     return ''
   }, [student, staff, settings])
 
+  // Génération du QR code à l'ouverture de la modale
   useEffect(() => {
     if (!open || !qrContent) return
+    setQrDataUrl('') // reset
     QRCode.toDataURL(qrContent, {
       width: 400,
       margin: 2,
-      color: {
-        dark: '#0f5132',
-        light: '#ffffff',
-      },
+      color: { dark: '#0f5132', light: '#ffffff' },
       errorCorrectionLevel: 'M',
     })
       .then(url => setQrDataUrl(url))
       .catch(err => {
         console.error('Erreur génération QR Code', err)
+        toast.error('Erreur lors de la génération du QR Code.')
       })
   }, [open, qrContent])
 
   if (!entity) return null
 
+  // ── Télécharger le QR code en PNG
   function downloadQr() {
     if (!qrDataUrl) return
     const a = document.createElement('a')
@@ -91,10 +92,12 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
     toast.success('QR Code téléchargé.')
   }
 
+  // ── Copier les informations textuelles
   function copyTextInfo() {
     let text = ''
     if (student) {
-      text = `=== FICHE ÉLÈVE — ${settings?.school_name || 'CSE DIVO'} ===\n` +
+      text =
+        `=== FICHE ÉLÈVE — ${settings?.school_name || 'CSE DIVO'} ===\n` +
         `Matricule : ${student.matricule}\n` +
         `Nom & Prénoms : ${student.nom} ${student.prenoms}\n` +
         `Classe : ${student.classe_nom || 'Sans classe'}\n` +
@@ -107,7 +110,8 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
         `Statut : ${student.statut === 'SOLDE' ? 'Soldé' : student.statut === 'CREDIT' ? 'Crédit' : 'Non soldé'}\n` +
         `Année scolaire : ${settings?.annee_scolaire || ''}`
     } else if (staff) {
-      text = `=== FICHE PERSONNEL — ${settings?.school_name || 'CSE DIVO'} ===\n` +
+      text =
+        `=== FICHE PERSONNEL — ${settings?.school_name || 'CSE DIVO'} ===\n` +
         `Matricule : ${staff.matricule || 'PER'}\n` +
         `Nom & Prénoms : ${staff.nom} ${staff.prenoms}\n` +
         `Poste : ${staff.poste || 'Personnel'}\n` +
@@ -122,80 +126,194 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ── Envoi SMS via lien sms: (ouvre l'app SMS du téléphone/PC)
+  function handleSendSMS() {
+    const tel = isStudent ? student?.parent_tel : staff?.telephone
+    if (!tel) {
+      toast.error('Aucun numéro de téléphone disponible.')
+      return
+    }
+    const nom = `${entity!.nom} ${entity!.prenoms}`
+    const school = settings?.school_name || 'CSE DIVO'
+    let msg = ''
+    if (isStudent && student) {
+      const reste = student.total_du - student.total_paye
+      msg =
+        `Bonjour, concernant l'élève ${nom} (${student.matricule}) - ${student.classe_nom || ''}:\n` +
+        `Reste à payer : ${fmt(reste)} FCFA.\n` +
+        `Merci de régulariser au plus tôt.\n— ${school}`
+    } else if (staff) {
+      msg = `Bonjour ${nom}, message de ${school}. Merci de contacter l'administration.`
+    }
+    // Nettoyage numéro Côte d'Ivoire : 10 chiffres → +225...
+    let clean = tel.replace(/[^0-9]/g, '')
+    if (clean.length === 10) clean = '+225' + clean
+    else if (!clean.startsWith('+')) clean = '+' + clean
+    // Le lien sms: ouvre l'app SMS native avec numéro + message pré-rempli
+    const smsLink = `sms:${clean}?body=${encodeURIComponent(msg)}`
+    window.location.href = smsLink
+    toast.success('Application SMS ouverte avec le message.')
+  }
+
+  // ── Envoi WhatsApp avec message pré-rempli
+  function handleWhatsApp() {
+    const tel = isStudent ? student?.parent_tel : staff?.telephone
+    if (!tel) {
+      toast.error('Aucun numéro de téléphone disponible.')
+      return
+    }
+    const nom = `${entity!.nom} ${entity!.prenoms}`
+    const school = settings?.school_name || 'CSE DIVO'
+    let msg = ''
+    if (isStudent && student) {
+      const reste = student.total_du - student.total_paye
+      msg =
+        `Bonjour, nous vous contactons au sujet de l'élève *${nom}* (Matricule : ${student.matricule}) — Classe : ${student.classe_nom || 'Non affecté'}.\n\n` +
+        `Montant restant à payer : *${fmt(reste)} FCFA*.\n\n` +
+        `Nous vous prions de bien vouloir régulariser cette situation dans les meilleurs délais.\n\n` +
+        `Cordialement,\n${school}`
+    } else if (staff) {
+      msg = `Bonjour ${nom}, message de l'administration du ${school}. Merci de nous contacter.`
+    }
+    let clean = tel.replace(/[^0-9]/g, '')
+    if (clean.length === 10) clean = '225' + clean
+    const waLink = `https://wa.me/${clean}?text=${encodeURIComponent(msg)}`
+    window.open(waLink, '_blank')
+    toast.success('WhatsApp ouvert avec le message.')
+  }
+
+  // ── Impression du badge — le QR (base64) est injecté directement dans le HTML
   function handlePrintBadge() {
     if (!entity) return
+    if (!qrDataUrl) {
+      toast.error('Le QR code est encore en cours de génération. Attendez quelques secondes puis réessayez.')
+      return
+    }
+
     const school = settings?.school_name || 'CSE DIVO'
     const sigle = settings?.sigle || 'CSE'
     const annee = settings?.annee_scolaire || ''
     const matricule = isStudent ? student?.matricule : (staff?.matricule || 'PER')
     const nomComplet = `${entity.nom} ${entity.prenoms}`
-    const sousTitre = isStudent ? `Classe : ${student?.classe_nom || 'Non affecté'}` : `Poste : ${staff?.poste || 'Personnel'}`
+    const sousTitre = isStudent
+      ? `Classe : ${student?.classe_nom || 'Non affecté'}`
+      : `Poste : ${staff?.poste || 'Personnel'}`
     const photoUrl = isStudent ? student?.photo : undefined
     const statutBadge = isStudent
       ? (student?.statut === 'SOLDE' ? 'SOLDÉ' : student?.statut === 'CREDIT' ? 'CRÉDIT' : 'NON SOLDÉ')
       : (staff?.actif ? 'ACTIF' : 'INACTIF')
+    const statutColor = isStudent
+      ? (student?.statut === 'SOLDE' ? '#16a34a' : student?.statut === 'CREDIT' ? '#2563eb' : '#dc2626')
+      : (staff?.actif ? '#16a34a' : '#dc2626')
 
+    // qrDataUrl est déjà une data:image/png;base64,... — aucun chargement réseau nécessaire
     const win = window.open('', '_blank')
-    if (!win) return
+    if (!win) {
+      toast.error("Fenêtre bloquée par le navigateur. Autorisez les pop-ups pour cette page.")
+      return
+    }
+
     win.document.open()
     win.document.write(`<!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <title>Badge — ${nomComplet}</title>
   <style>
     @page { size: 86mm 54mm landscape; margin: 0; }
-    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #eee; }
-    .badge-card { width: 85mm; height: 53mm; background: #ffffff; border-radius: 6mm; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1.5px solid #0f5132; padding: 3.5mm 4mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
-    .badge-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #0f5132; padding-bottom: 1.5mm; }
-    .school-title { font-size: 11px; font-weight: 800; color: #0f5132; text-transform: uppercase; letter-spacing: 0.5px; }
-    .school-sigle { font-size: 9px; font-weight: bold; color: #666; }
-    .badge-body { display: flex; align-items: center; gap: 3mm; flex: 1; padding: 1.5mm 0; }
-    .photo-img { width: 20mm; height: 24mm; object-fit: cover; border-radius: 2.5mm; border: 1px solid #0f5132; background: #f0f7f2; }
-    .photo-placeholder { width: 20mm; height: 24mm; border-radius: 2.5mm; border: 1px dashed #0f5132; background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #0f5132; }
-    .qr-img { width: 22mm; height: 22mm; border: 1px solid #0f5132; border-radius: 2.5mm; padding: 0.5mm; background: #fff; }
-    .info-col { flex: 1; min-width: 0; }
-    .name { font-size: 11.5px; font-weight: bold; color: #111; margin-bottom: 0.5mm; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mat { font-size: 9.5px; font-family: monospace; font-weight: bold; color: #0f5132; background: #e8f5e9; padding: 1px 4px; border-radius: 2px; display: inline-block; margin-bottom: 0.5mm; }
-    .meta { font-size: 8.5px; color: #444; margin-bottom: 0.5mm; }
-    .badge-status { display: inline-block; font-size: 7.5px; font-weight: bold; padding: 1px 4px; border-radius: 2mm; background: #0f5132; color: #fff; margin-top: 0.5mm; }
-    .badge-footer { display: flex; justify-content: space-between; align-items: center; font-size: 7px; color: #777; border-top: 1px solid #eee; padding-top: 1mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #e5e7eb;
+    }
+    .badge-card {
+      width: 85mm; height: 53mm;
+      background: #fff;
+      border-radius: 5mm;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      border: 1.5px solid #0f5132;
+      padding: 3mm 3.5mm;
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+      position: relative;
+      overflow: hidden;
+    }
+    .badge-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1.5px solid #0f5132;
+      padding-bottom: 1.5mm;
+    }
+    .school-title { font-size: 10.5px; font-weight: 800; color: #0f5132; text-transform: uppercase; letter-spacing: .3px; }
+    .school-sub   { font-size: 7.5px; color: #555; }
+    .badge-body   { display: flex; align-items: center; gap: 2.5mm; flex: 1; }
+    .photo-img    { width: 19mm; height: 23mm; object-fit: cover; border-radius: 2mm; border: 1.5px solid #0f5132; flex-shrink: 0; }
+    .photo-ph     { width: 19mm; height: 23mm; border-radius: 2mm; border: 1.5px dashed #0f5132; background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: #0f5132; flex-shrink: 0; }
+    .info-col     { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .8mm; }
+    .mat          { font-size: 8.5px; font-family: monospace; font-weight: bold; color: #0f5132; background: #e8f5e9; padding: 1px 3px; border-radius: 2px; display: inline-block; }
+    .name         { font-size: 10.5px; font-weight: bold; color: #111; line-height: 1.15; }
+    .meta         { font-size: 7.5px; color: #444; }
+    .badge-status { display: inline-block; font-size: 7px; font-weight: bold; padding: 1px 4px; border-radius: 2mm; color: #fff; margin-top: .5mm; }
+    .qr-wrap      { display: flex; flex-direction: column; align-items: center; gap: .5mm; flex-shrink: 0; }
+    .qr-img       { width: 21mm; height: 21mm; border: 1px solid #0f5132; border-radius: 2mm; padding: .5mm; background: #fff; display: block; }
+    .qr-label     { font-size: 6px; color: #777; text-align: center; font-family: monospace; }
+    .badge-footer { display: flex; justify-content: space-between; align-items: center; font-size: 6.5px; color: #888; border-top: 1px solid #e5e7eb; padding-top: 1mm; }
     @media print {
-      body { background: transparent; }
-      .badge-card { box-shadow: none; border: 1px solid #0f5132; }
+      body { background: transparent; min-height: unset; }
+      .badge-card { box-shadow: none; page-break-inside: avoid; }
     }
   </style>
 </head>
 <body>
   <div class="badge-card">
     <div class="badge-header">
-      <div class="school-title">${school}</div>
-      <div class="school-sigle">${sigle} • ${annee}</div>
+      <div>
+        <div class="school-title">${school}</div>
+        <div class="school-sub">${sigle} • ${annee}</div>
+      </div>
+      <div class="school-sub" style="text-align:right;color:#0f5132;font-weight:bold;">${isStudent ? 'CARTE SCOLAIRE' : 'CARTE PRO'}</div>
     </div>
     <div class="badge-body">
-      ${photoUrl ? `<img class="photo-img" src="${photoUrl}" alt="Photo" />` : `<div class="photo-placeholder">${entity.nom.charAt(0)}${entity.prenoms.charAt(0)}</div>`}
+      ${photoUrl
+        ? `<img class="photo-img" src="${photoUrl}" alt="Photo">`
+        : `<div class="photo-ph">${entity.nom.charAt(0)}${entity.prenoms.charAt(0)}</div>`}
       <div class="info-col">
-        <div class="mat">${matricule}</div>
+        <span class="mat">${matricule}</span>
         <div class="name">${nomComplet}</div>
         <div class="meta">${sousTitre}</div>
         ${isStudent && student?.parent_tel ? `<div class="meta">Urg: ${student.parent_tel}</div>` : ''}
         ${!isStudent && staff?.telephone ? `<div class="meta">Tél: ${staff.telephone}</div>` : ''}
-        <div><span class="badge-status">${statutBadge}</span></div>
+        <span class="badge-status" style="background:${statutColor}">${statutBadge}</span>
       </div>
-      <img class="qr-img" src="${qrDataUrl}" alt="QR Code" />
+      <div class="qr-wrap">
+        <img class="qr-img" id="qrImg" src="${qrDataUrl}" alt="QR Code">
+        <div class="qr-label">Scannez</div>
+      </div>
     </div>
     <div class="badge-footer">
       <span>CARTE OFFICIELLE D'IDENTITÉ</span>
-      <span>Scannez pour vérifier l'authenticité</span>
+      <span>Vérifiez l'authenticité via QR</span>
     </div>
   </div>
   <script>
-    window.onload = function() { window.print(); }
+    // Le QR est en base64 donc toujours disponible immédiatement
+    // On attend quand même le chargement complet de la page avant d'imprimer
+    window.addEventListener('load', function () {
+      setTimeout(function () { window.print(); }, 300);
+    });
   </script>
 </body>
 </html>`)
     win.document.close()
   }
+
+  const hasTel = isStudent ? !!student?.parent_tel : !!staff?.telephone
 
   return (
     <Modal
@@ -205,24 +323,22 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
       maxWidth="md"
     >
       <div className="space-y-6">
-        {/* Carte / Badge Scolaire Visuel */}
+        {/* Carte badge visuelle */}
         <div
           ref={printRef}
           className="relative bg-gradient-to-br from-primary-900 via-primary-800 to-emerald-950 text-white rounded-3xl p-6 shadow-xl border border-primary-700/50 overflow-hidden"
         >
-          {/* Filigrane d'arrière-plan */}
-          <div className="absolute -right-12 -bottom-12 opacity-10 pointer-events-none text-9xl">
-            🏫
-          </div>
+          {/* Filigrane */}
+          <div className="absolute -right-12 -bottom-12 opacity-10 pointer-events-none text-9xl">🏫</div>
 
-          {/* En-tête du badge */}
+          {/* En-tête */}
           <div className="flex items-start justify-between border-b border-primary-600/60 pb-3 mb-4">
             <div>
               <p className="text-xs uppercase tracking-widest text-primary-200 font-semibold">
                 {settings?.school_name || 'CSE DIVO'}
               </p>
               <h3 className="text-sm font-bold text-white">
-                {isStudent ? 'CARTE SCOLAIRE D’IDENTITÉ' : 'CARTE PROFESSIONNELLE'}
+                {isStudent ? 'CARTE SCOLAIRE D\u2019IDENTITÉ' : 'CARTE PROFESSIONNELLE'}
               </h3>
             </div>
             <div className="text-right">
@@ -232,9 +348,9 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
             </div>
           </div>
 
-          {/* Corps du badge avec Photo d'identité et Code QR */}
+          {/* Corps badge */}
           <div className="flex flex-col sm:flex-row items-center gap-5">
-            {/* Photo d'identité de l'élève */}
+            {/* Photo */}
             <div className="shrink-0">
               {isStudent && student?.photo ? (
                 <img
@@ -250,7 +366,7 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
               )}
             </div>
 
-            {/* Informations détaillées */}
+            {/* Infos */}
             <div className="flex-1 space-y-2 text-center sm:text-left">
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 font-mono text-xs font-bold tracking-wider text-amber-300">
@@ -325,13 +441,14 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
               )}
             </div>
 
-            {/* Code QR généré */}
-            <div className="bg-white p-2 rounded-2xl shadow-md border-2 border-primary-400 shrink-0">
+            {/* QR Code — toujours rendu, indicateur si en cours */}
+            <div className="bg-white p-2 rounded-2xl shadow-md border-2 border-primary-400 shrink-0 flex flex-col items-center">
               {qrDataUrl ? (
                 <img src={qrDataUrl} alt="QR Code" className="w-28 h-28 rounded-lg object-contain" />
               ) : (
-                <div className="w-28 h-28 flex items-center justify-center text-gray-400">
+                <div className="w-28 h-28 flex flex-col items-center justify-center gap-2">
                   <QrIcon className="h-8 w-8 animate-pulse text-primary-700" />
+                  <span className="text-[9px] text-primary-700 font-mono">Génération…</span>
                 </div>
               )}
               <p className="text-[9px] text-center text-gray-500 font-mono mt-0.5">Scannez-moi</p>
@@ -345,12 +462,15 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
         </div>
 
         {/* Boutons d'actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-          <div className="flex gap-2">
+        <div className="space-y-3">
+          {/* Ligne 1 : actions badge */}
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               icon={<Download className="h-4 w-4" />}
               onClick={downloadQr}
+              disabled={!qrDataUrl}
+              title={!qrDataUrl ? 'QR en cours de génération…' : 'Télécharger le QR code'}
             >
               Télécharger QR (.png)
             </Button>
@@ -358,20 +478,49 @@ export function QrBadgeModal({ open, onClose, student, staff, settings }: QrBadg
               variant="secondary"
               icon={<Printer className="h-4 w-4" />}
               onClick={handlePrintBadge}
+              disabled={!qrDataUrl}
+              title={!qrDataUrl ? 'QR en cours de génération…' : 'Imprimer le badge format carte (86×54 mm)'}
             >
-              Imprimer le badge
+              Imprimer badge
             </Button>
             <Button
               variant="secondary"
               icon={copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
               onClick={copyTextInfo}
             >
-              {copied ? 'Copié !' : 'Copier'}
+              {copied ? 'Copié !' : 'Copier infos'}
             </Button>
           </div>
-          <Button variant="secondary" onClick={onClose}>
-            Fermer
-          </Button>
+
+          {/* Ligne 2 : contact rapide SMS / WhatsApp */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+            {hasTel ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 font-medium">Contacter :</span>
+                <button
+                  onClick={handleSendSMS}
+                  title="Ouvrir l'app SMS avec le message pré-rempli"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  Envoyer SMS
+                </button>
+                <button
+                  onClick={handleWhatsApp}
+                  title="Ouvrir WhatsApp avec le message pré-rempli"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  WhatsApp
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Aucun numéro de téléphone renseigné</span>
+            )}
+            <Button variant="secondary" onClick={onClose}>
+              Fermer
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>

@@ -120,11 +120,21 @@ export default function Reminders() {
   // Helper for WhatsApp link
   const getWhatsAppLink = (tel?: string, msg = '') => {
     if (!tel) return '#'
-    // Clean phone number (strip spaces, dashes, add +225 if local 10 digits)
+    // Clean phone number (strip spaces, dashes, add 225 if local 10 digits)
     let clean = tel.replace(/[^0-9]/g, '')
     if (clean.length === 10) clean = '225' + clean
     return `https://wa.me/${clean}?text=${encodeURIComponent(msg)}`
   }
+
+  // Helper for SMS link (opens native SMS app with pre-filled number and message)
+  const getSmsLink = (tel?: string, msg = '') => {
+    if (!tel) return '#'
+    let clean = tel.replace(/[^0-9]/g, '')
+    if (clean.length === 10) clean = '+225' + clean
+    else if (!clean.startsWith('+')) clean = '+' + clean
+    return `sms:${clean}?body=${encodeURIComponent(msg)}`
+  }
+
 
   return (
     <div className="space-y-6">
@@ -326,6 +336,15 @@ export default function Reminders() {
                             <ExternalLink className="h-3 w-3" /> WhatsApp
                           </a>
                         )}
+                        {rem.channel === 'SMS' && rem.parent_tel && (
+                          <a
+                            href={getSmsLink(rem.parent_tel, rem.message)}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                            title="Ouvrir l'application SMS"
+                          >
+                            <Phone className="h-3 w-3" /> SMS
+                          </a>
+                        )}
                         <Button
                           size="sm"
                           variant="secondary"
@@ -337,6 +356,7 @@ export default function Reminders() {
                         </Button>
                       </div>
                     </td>
+
                   </tr>
                 ))
               )}
